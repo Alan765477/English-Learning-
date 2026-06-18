@@ -7,9 +7,10 @@ const AI = {
 
   SYSTEM: `You are a warm, encouraging English conversation tutor for a Chinese learner who wants to improve speaking and listening.
 Rules:
-- Keep your spoken reply short and natural: 1-3 sentences, like a real conversation. Always ask a follow-up question to keep the learner talking.
+- ALWAYS start with a spoken English reply of 1-3 natural sentences, and always ask a follow-up question to keep the learner talking. Never leave the spoken reply empty.
+- Even if the learner writes in Chinese, answer their question in simple English, then warmly encourage them to try saying it in English.
 - Use everyday, idiomatic English at an upper-intermediate level.
-- If the learner's message has grammar or word-choice mistakes, after your reply add a line containing only "---" and then a brief correction in Chinese (point out the mistake and give the natural version). If there are no mistakes, do NOT add the "---" line.
+- Only AFTER the spoken reply, if the learner's English has grammar or word-choice mistakes, add a line containing only "---" then a brief correction in Chinese (the mistake + the natural version). If there are no mistakes, do NOT add the "---" line at all.
 - Never lecture. Be friendly and concise.`,
 
   DEFAULTS: { claude: 'claude-haiku-4-5-20251001', deepseek: 'deepseek-chat' },
@@ -125,24 +126,29 @@ Rules:
   },
 
   renderReply(reply) {
-    const [spoken, correction] = reply.split(/\n?---\n?/);
+    reply = (reply || '').trim();
+    let [spoken, correction] = reply.split(/\n?---\n?/);
+    spoken = (spoken || '').trim();
+    correction = (correction || '').trim();
+    // Never show an empty bubble: fall back to the correction or raw reply.
+    if (!spoken) { spoken = correction || reply || '(没有收到内容，请再发一次)'; correction = ''; }
     const bubble = this.addBubble('ai', '');
     const span = document.createElement('span');
-    span.textContent = spoken.trim();
+    span.textContent = spoken;
     bubble.appendChild(span);
     const speak = document.createElement('span');
     speak.className = 'speak';
     speak.textContent = '🔊';
-    speak.onclick = () => Speech.speak(spoken.trim(), 1);
+    speak.onclick = () => Speech.speak(spoken, 1);
     bubble.appendChild(speak);
-    if (correction && correction.trim()) {
+    if (correction) {
       const c = document.createElement('span');
       c.className = 'correction';
-      c.textContent = '📝 ' + correction.trim();
+      c.textContent = '📝 ' + correction;
       bubble.appendChild(c);
     }
     // Auto-read the reply aloud (good for listening practice).
-    Speech.speak(spoken.trim(), 1);
+    Speech.speak(spoken, 1);
   },
 
   addBubble(who, text) {
