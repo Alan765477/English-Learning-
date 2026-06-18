@@ -6,6 +6,7 @@ const App = {
     Shadowing.init();
     Dictation.init();
     AI.init();
+    Video.init();
     this.initSettings();
     this.initNav();
     this.registerSW();
@@ -19,6 +20,7 @@ const App = {
 
   show(view, tab) {
     Speech.stop();
+    if (window.Video) Video.pause();
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     document.getElementById('view-' + view).classList.remove('hidden');
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -57,8 +59,9 @@ const App = {
     const voiceSel = document.getElementById('set-voice');
     const fillVoices = () => {
       if (!Speech.voices.length) return;
-      voiceSel.innerHTML = Speech.voices
-        .map(v => `<option value="${v.voiceURI}">${v.name}（${v.lang}）</option>`).join('');
+      const q = { 2: '✨高质量', 1: '', 0: '·精简' };
+      voiceSel.innerHTML = Speech.rankedVoices()
+        .map(v => `<option value="${v.voiceURI}">${v.name}（${v.lang}）${q[Speech.voiceQuality(v)]}</option>`).join('');
       voiceSel.value = Store.get('voiceURI') || (Speech.pickVoice()?.voiceURI || '');
     };
     fillVoices();

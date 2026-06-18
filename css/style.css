@@ -169,6 +169,25 @@ html, body {
 .about h3 { margin-bottom: 8px; }
 .about p { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
 
+/* Video */
+.source-toggle { justify-content: flex-start; margin-bottom: 12px; }
+.video-input { display: flex; gap: 8px; margin-bottom: 12px; }
+.video-input input {
+  flex: 1; background: var(--surface); color: var(--text);
+  border: 1px solid var(--surface-2); border-radius: 12px; padding: 12px 14px; font-size: 16px;
+}
+.recent-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.recent-list .recent { font-size: 13px; }
+.video-wrap {
+  position: relative; width: 100%; padding-top: 56.25%;
+  background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 14px;
+}
+.video-wrap:empty { display: none; }
+.video-wrap iframe, .video-wrap #yt-player {
+  position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
+}
+#video-rates { justify-content: flex-start; margin-bottom: 12px; }
+
 /* Tab bar */
 .tabbar {
   position: fixed;

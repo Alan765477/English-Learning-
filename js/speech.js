@@ -13,16 +13,29 @@ const Speech = {
     speechSynthesis.onvoiceschanged = load;
   },
 
+  // Higher = better quality. iOS marks downloaded high-quality voices as
+  // "premium"/"enhanced" and the low-quality default as "compact".
+  voiceQuality(v) {
+    const u = (v.voiceURI || '').toLowerCase();
+    if (/premium|enhanced|neural|siri/.test(u)) return 2;
+    if (/compact/.test(u)) return 0;
+    return 1;
+  },
+
+  rankedVoices() {
+    const lang = (v) => /en-US/i.test(v.lang) ? 2 : /en-GB/i.test(v.lang) ? 1 : 0;
+    return [...this.voices].sort((a, b) =>
+      this.voiceQuality(b) - this.voiceQuality(a) || lang(b) - lang(a));
+  },
+
   pickVoice() {
     const uri = Store.get('voiceURI');
     if (uri) {
       const found = this.voices.find(v => v.voiceURI === uri);
       if (found) return found;
     }
-    // Prefer a natural en-US / en-GB voice.
-    return this.voices.find(v => /en-US/i.test(v.lang))
-        || this.voices.find(v => /en-GB/i.test(v.lang))
-        || this.voices[0] || null;
+    // Auto-pick the highest-quality English voice available on the device.
+    return this.rankedVoices()[0] || null;
   },
 
   speak(text, rate = 1) {

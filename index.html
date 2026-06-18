@@ -128,6 +128,39 @@
       <p class="ai-warn" id="ai-warn"></p>
     </section>
 
+    <!-- 视频学习 -->
+    <section class="view hidden" id="view-video">
+      <header class="view-header">
+        <h1>视频学习</h1>
+        <p class="subtitle">贴 YouTube / B站 链接 · 变速 · 句子复读</p>
+      </header>
+      <div class="toggle-row source-toggle">
+        <button class="chip on" data-src="youtube">YouTube</button>
+        <button class="chip" data-src="bilibili">哔哩哔哩</button>
+      </div>
+      <div class="video-input">
+        <input type="text" id="video-url" placeholder="粘贴视频链接…" />
+        <button class="btn-send" id="video-load">打开</button>
+      </div>
+      <div id="video-recent" class="recent-list"></div>
+      <div id="video-wrap" class="video-wrap"></div>
+      <div id="video-controls" class="hidden">
+        <div class="toggle-row" id="video-rates">
+          <button class="chip" data-rate="0.5">0.5x</button>
+          <button class="chip" data-rate="0.75">0.75x</button>
+          <button class="chip on" data-rate="1">1.0x</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn-secondary" id="video-back5">⟲ 退5秒</button>
+          <button class="btn-secondary" id="video-mark-a">设 A 点</button>
+          <button class="btn-secondary" id="video-mark-b">设 B 点</button>
+          <button class="btn-primary" id="video-loop">🔁 复读</button>
+        </div>
+        <p class="mic-status" id="video-status"></p>
+      </div>
+      <p class="hint" id="video-hint"></p>
+    </section>
+
     <!-- 设置 -->
     <section class="view hidden" id="view-settings">
       <header class="view-header">
@@ -159,7 +192,7 @@
           朗读语音
           <select id="set-voice"></select>
         </label>
-        <p class="hint">用于听力、跟读、听写的标准发音。建议选英式/美式英语女声。</p>
+        <p class="hint">用于听力、跟读、听写的标准发音，选 ✨高质量 的最自然。<br>iPhone 下载更自然的语音：设置 → 辅助功能 → 朗读内容 → 声音 → 英语 → 选「增强/高级」下载，再回这里选它。</p>
       </div>
       <div class="card about">
         <h3>关于</h3>
@@ -173,6 +206,7 @@
       <button class="tab" data-view="shadow"><span>🗣️</span>跟读</button>
       <button class="tab" data-view="dictation"><span>✍️</span>听写</button>
       <button class="tab" data-view="ai"><span>🤖</span>陪练</button>
+      <button class="tab" data-view="video"><span>📺</span>视频</button>
       <button class="tab" data-view="settings"><span>⚙️</span>设置</button>
     </nav>
   </div>
@@ -184,6 +218,7 @@
   <script src="js/shadowing.js"></script>
   <script src="js/dictation.js"></script>
   <script src="js/ai.js"></script>
+  <script src="js/video.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
