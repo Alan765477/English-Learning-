@@ -52,8 +52,16 @@ const Shadowing = {
 
   async startRecord() {
     const status = document.getElementById('shadow-status');
+    // Guard against double-trigger from touch + emulated mouse events.
+    if (this.recorder || this._starting) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      status.textContent = '此环境不支持录音。请用 Safari 浏览器打开（桌面图标的 PWA 模式可能受限）。';
+      return;
+    }
+    this._starting = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this._starting = false;
       this.chunks = [];
       this.recorder = new MediaRecorder(stream);
       this.recorder.ondataavailable = (e) => this.chunks.push(e.data);
@@ -83,7 +91,12 @@ const Shadowing = {
         this._recognizing = false;
       }
     } catch (err) {
-      status.textContent = '无法访问麦克风，请检查权限。';
+      this._starting = false;
+      const name = err && err.name;
+      status.textContent =
+        name === 'NotAllowedError' ? '麦克风权限被拒：设置→Safari→麦克风 改为「允许」，或点开网页时选「允许」。'
+        : name === 'NotFoundError' ? '没找到麦克风设备。'
+        : '无法访问麦克风：请改用 Safari 浏览器打开（桌面图标 PWA 模式可能不支持录音）。';
     }
   },
 
