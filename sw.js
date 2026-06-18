@@ -1,6 +1,6 @@
 // Service worker: cache the app shell so listening/shadowing/dictation
 // work offline. AI chat still needs the network (it calls a remote API).
-const CACHE = 'els-v4';
+const CACHE = 'els-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -34,15 +34,18 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // Never cache API calls.
-  if (/anthropic\.com|deepseek\.com/.test(url.host)) return;
+  if (e.request.method !== 'GET') return;
+  // Don't touch third-party calls (APIs, SDKs, embedded players).
+  if (url.origin !== location.origin) return;
+  // Network-first: when online always serve the latest, fall back to cache
+  // offline. This avoids stale app shells after an update.
   e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-      if (e.request.method === 'GET' && res.ok && url.origin === location.origin) {
+    fetch(e.request).then(res => {
+      if (res.ok) {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));
       }
       return res;
-    }).catch(() => hit))
+    }).catch(() => caches.match(e.request))
   );
 });
