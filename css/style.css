@@ -188,6 +188,27 @@ html, body {
 }
 #video-rates { justify-content: flex-start; margin-bottom: 12px; }
 
+/* Interpreter */
+.interp-interim { color: var(--text-dim); font-style: italic; min-height: 20px; padding: 4px 2px; }
+.interp-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.interp-row { background: var(--surface); border-radius: 12px; padding: 12px 14px; }
+.interp-en { font-size: 16px; font-weight: 600; }
+.interp-zh { color: var(--primary-light); font-size: 15px; margin-top: 5px; }
+
+/* Vocabulary */
+.vocab-stats { display: flex; gap: 18px; margin-bottom: 14px; color: var(--text-dim); font-size: 14px; }
+.vocab-stats b { color: var(--text); font-size: 16px; }
+.vocab-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.vocab-item { display: flex; justify-content: space-between; align-items: center; background: var(--surface); border-radius: 12px; padding: 12px 14px; }
+.vocab-w { font-size: 17px; font-weight: 600; }
+.vocab-w .speak { cursor: pointer; opacity: .6; font-size: 14px; }
+.vocab-zh { color: var(--text-dim); font-size: 14px; margin-top: 3px; }
+.vocab-del { background: none; border: none; color: var(--bad); font-size: 14px; }
+.vocab-flashcard { text-align: center; min-height: 200px; display: flex; flex-direction: column; justify-content: center; }
+.vocab-card-w { font-size: 30px; font-weight: 700; }
+.vocab-card-zh { font-size: 20px; color: var(--primary-light); margin-top: 16px; }
+.hidden-text { visibility: hidden; }
+
 /* Tab bar */
 .tabbar {
   position: fixed;

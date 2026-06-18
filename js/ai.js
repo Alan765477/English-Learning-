@@ -81,6 +81,40 @@ Rules:
     }
   },
 
+  configured() { return !!Store.get('apiKey'); },
+
+  // One-shot translation to Chinese (no conversation history). Used by the
+  // real-time interpreter. Falls back by throwing if no key is set.
+  async translate(text) {
+    const provider = Store.get('provider');
+    const key = Store.get('apiKey');
+    if (!key) throw new Error('no-key');
+    const model = Store.get('model') || this.DEFAULTS[provider];
+    const sys = 'You are a translation engine. Translate the English text to natural, concise Simplified Chinese. Output ONLY the translation, nothing else.';
+    if (provider === 'deepseek') {
+      const res = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({ model, max_tokens: 200, messages: [
+          { role: 'system', content: sys }, { role: 'user', content: text },
+        ] }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return (await res.json()).choices?.[0]?.message?.content?.trim() || '';
+    }
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json', 'x-api-key': key,
+        'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({ model, max_tokens: 200, system: sys, messages: [{ role: 'user', content: text }] }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    return (data.content || []).map(c => c.text || '').join('').trim();
+  },
+
   async callProvider(text) {
     const provider = Store.get('provider');
     const key = Store.get('apiKey');

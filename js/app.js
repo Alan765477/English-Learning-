@@ -2,12 +2,11 @@
 const App = {
   init() {
     Speech.init();
-    Listening.init();
-    Shadowing.init();
-    Dictation.init();
-    AI.init();
-    Video.init();
-    this.initSettings();
+    // Init each module independently so one failure can't break the rest.
+    [Listening, Shadowing, Dictation, AI, Video, Interpreter, Vocab].forEach(m => {
+      try { m.init(); } catch (e) { console.error('init failed', e); }
+    });
+    try { this.initSettings(); } catch (e) { console.error(e); }
     this.initNav();
     this.registerSW();
   },
@@ -21,6 +20,7 @@ const App = {
   show(view, tab) {
     Speech.stop();
     if (window.Video) Video.pause();
+    if (window.Interpreter && Interpreter.active && view !== 'interp') Interpreter.stop();
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     document.getElementById('view-' + view).classList.remove('hidden');
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -53,6 +53,25 @@ const App = {
       const tip = document.getElementById('set-saved');
       tip.classList.remove('hidden');
       setTimeout(() => tip.classList.add('hidden'), 2000);
+    };
+
+    // Azure settings.
+    const azKey = document.getElementById('set-azure-key');
+    const azRegion = document.getElementById('set-azure-region');
+    const azVoice = document.getElementById('set-azure-voice');
+    azKey.value = Store.get('azureKey');
+    azRegion.value = Store.get('azureRegion');
+    azVoice.value = Store.get('azureVoice');
+    document.getElementById('set-azure-save').onclick = () => {
+      Store.setAll({
+        azureKey: azKey.value.trim(),
+        azureRegion: azRegion.value.trim(),
+        azureVoice: azVoice.value,
+      });
+      const tip = document.getElementById('set-azure-saved');
+      tip.classList.remove('hidden');
+      setTimeout(() => tip.classList.add('hidden'), 2000);
+      Speech.speak('Azure neural voice is ready.', 1);
     };
 
     // Voice picker (populated once voices load).

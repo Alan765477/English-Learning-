@@ -67,12 +67,20 @@ const Shadowing = {
       document.getElementById('shadow-record').classList.add('recording');
       status.textContent = '录音中… 松开结束';
 
-      // Run recognition in parallel for scoring (best-effort).
-      this._recognizing = Speech.recognitionSupported();
-      if (this._recognizing) {
+      // Score the attempt. Prefer Azure's professional assessment; otherwise
+      // fall back to the free browser recognition (word-match score).
+      if (window.Azure && Azure.assessConfigured()) {
+        this._recognizing = true;
+        Azure.assess(this.cur().en)
+          .then(r => this.showAzureScore(r))
+          .catch(() => { document.getElementById('shadow-status').textContent = 'Azure 评分失败，回放对比即可。'; });
+      } else if (Speech.recognitionSupported()) {
+        this._recognizing = true;
         Speech.recognizeOnce()
           .then(heard => this.showScore(heard))
           .catch(() => { /* ignore – recording still works */ });
+      } else {
+        this._recognizing = false;
       }
     } catch (err) {
       status.textContent = '无法访问麦克风，请检查权限。';
@@ -99,6 +107,21 @@ const Shadowing = {
       score >= 80 ? 'var(--good)' : score >= 50 ? 'var(--warn)' : 'var(--bad)';
     document.getElementById('shadow-heard').innerHTML =
       words.map(o => `<span class="${o.ok ? 'hit' : 'miss'}">${o.w}</span>`).join(' ');
+  },
+
+  showAzureScore(r) {
+    document.getElementById('shadow-status').textContent = '';
+    const box = document.getElementById('shadow-score');
+    box.classList.remove('hidden');
+    const num = document.getElementById('shadow-score-num');
+    num.textContent = r.pron + '分';
+    num.style.color = r.pron >= 80 ? 'var(--good)' : r.pron >= 60 ? 'var(--warn)' : 'var(--bad)';
+    const wordHtml = r.words.map(w => {
+      const cls = (w.error && w.error !== 'None') ? 'miss' : 'hit';
+      return `<span class="${cls}">${w.word}</span>`;
+    }).join(' ');
+    document.getElementById('shadow-heard').innerHTML =
+      `准确度 ${r.accuracy} · 流利度 ${r.fluency} · 完整度 ${r.completeness}<br>${wordHtml}`;
   },
 
   replay() {

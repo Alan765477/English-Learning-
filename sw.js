@@ -1,18 +1,21 @@
 // Service worker: cache the app shell so listening/shadowing/dictation
 // work offline. AI chat still needs the network (it calls a remote API).
-const CACHE = 'els-v3';
+const CACHE = 'els-v4';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './js/storage.js',
   './js/lessons.js',
+  './js/azure.js',
   './js/speech.js',
   './js/listening.js',
   './js/shadowing.js',
   './js/dictation.js',
   './js/ai.js',
   './js/video.js',
+  './js/translate.js',
+  './js/vocab.js',
   './js/app.js',
   './icons/icon.svg',
   './manifest.webmanifest',

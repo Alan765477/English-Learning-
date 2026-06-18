@@ -39,6 +39,14 @@ const Speech = {
   },
 
   speak(text, rate = 1) {
+    // Use Azure neural voice when configured; otherwise the free browser voice.
+    if (window.Azure && Azure.ttsConfigured()) {
+      return Azure.speak(text, rate).catch(() => this._browserSpeak(text, rate));
+    }
+    return this._browserSpeak(text, rate);
+  },
+
+  _browserSpeak(text, rate = 1) {
     return new Promise((resolve) => {
       if (!('speechSynthesis' in window)) { resolve(); return; }
       speechSynthesis.cancel();
@@ -54,6 +62,7 @@ const Speech = {
 
   stop() {
     if ('speechSynthesis' in window) speechSynthesis.cancel();
+    if (window.Azure) Azure.stop();
   },
 
   recognitionSupported() {
