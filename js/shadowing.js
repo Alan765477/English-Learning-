@@ -26,13 +26,8 @@ const Shadowing = {
     document.getElementById('shadow-replay').onclick = () => this.replay();
 
     const recBtn = document.getElementById('shadow-record');
-    const start = (e) => { e.preventDefault(); this.startRecord(); };
-    const stop = (e) => { e.preventDefault(); this.stopRecord(); };
-    recBtn.addEventListener('mousedown', start);
-    recBtn.addEventListener('touchstart', start, { passive: false });
-    recBtn.addEventListener('mouseup', stop);
-    recBtn.addEventListener('touchend', stop, { passive: false });
-    recBtn.addEventListener('mouseleave', () => { if (this.active) this.stopRecord(); });
+    // Tap to start, tap again to stop (toggle).
+    recBtn.onclick = () => { this.active ? this.stopRecord() : this.startRecord(); };
 
     this.render();
   },
@@ -47,7 +42,8 @@ const Shadowing = {
     document.getElementById('shadow-ipa').textContent = s.ipa;
     document.getElementById('shadow-score').classList.add('hidden');
     document.getElementById('shadow-replay').disabled = !this.lastUrl;
-    document.getElementById('shadow-status').textContent = '按住「跟读」并朗读，松开看评分';
+    document.getElementById('shadow-record').textContent = '🎤 开始跟读';
+    document.getElementById('shadow-status').textContent = '点「开始跟读」朗读，再点一下结束看评分';
   },
 
   move(d) {
@@ -59,9 +55,12 @@ const Shadowing = {
   },
 
   status(msg) { document.getElementById('shadow-status').textContent = msg; },
+  setBtn(text) { document.getElementById('shadow-record').textContent = text; },
   endActive() {
     this.active = false;
-    document.getElementById('shadow-record').classList.remove('recording');
+    const btn = document.getElementById('shadow-record');
+    btn.classList.remove('recording');
+    btn.textContent = '🎤 开始跟读';
   },
 
   startRecord() {
@@ -69,6 +68,7 @@ const Shadowing = {
     this.active = true;
     this.heard = '';
     document.getElementById('shadow-record').classList.add('recording');
+    this.setBtn('⏹ 结束跟读');
     document.getElementById('shadow-score').classList.add('hidden');
 
     if (window.Azure && Azure.assessConfigured()) {
@@ -82,7 +82,7 @@ const Shadowing = {
     if (Speech.recognitionSupported()) {
       this.mode = 'recog';
       this.startRecognition();
-      this.status('🎤 听你跟读中… 松开结束');
+      this.status('🎤 听你跟读中… 说完再点一下结束');
       return;
     }
     // No recognition available: record audio so the learner can at least
@@ -131,7 +131,7 @@ const Shadowing = {
         document.getElementById('shadow-replay').disabled = false;
       };
       this.recorder.start();
-      this.status('录音中… 松开结束（此设备无自动打分，可回放对比）');
+      this.status('录音中… 说完再点一下结束（此设备无自动打分，可回放对比）');
     } catch (err) {
       this.endActive();
       const name = err && err.name;
