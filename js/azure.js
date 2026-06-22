@@ -5,11 +5,29 @@
 // Everything degrades gracefully: if Azure isn't configured or a call fails,
 // the app falls back to the free browser speech features.
 const Azure = {
-  cur: null,         // currently playing Audio element
+  cur: null,         // currently playing source (Web Audio BufferSource or <audio>)
   _sdkPromise: null,
+  _ctx: null,        // shared AudioContext (needed to beat iOS autoplay rules)
 
   ttsConfigured() {
     return !!(Store.get('azureKey') && Store.get('azureRegion'));
+  },
+
+  _audioCtx() {
+    if (!this._ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) this._ctx = new AC();
+    }
+    return this._ctx;
+  },
+
+  // iOS Safari only lets audio start from inside a user tap. Azure audio is
+  // fetched over the network first, so by the time it plays the "tap" is over
+  // and iOS blocks it. Resuming the AudioContext during the tap unlocks it for
+  // the rest of the session; we wire this to the first touch/click below.
+  unlock() {
+    const ctx = this._audioCtx();
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
   },
   assessConfigured() {
     return this.ttsConfigured();
@@ -57,7 +75,29 @@ const Azure = {
       throw new Error('连不上 Azure——多半是区域(Region)填错，或网络问题');
     }
     if (!res.ok) throw new Error(this._httpReason(res.status));
-    const url = URL.createObjectURL(await res.blob());
+
+    const bytes = await res.arrayBuffer();
+    const ctx = this._audioCtx();
+    // Preferred path: Web Audio. Once the context is unlocked in a tap it keeps
+    // playing even after the network delay, so iOS won't silence Azure.
+    if (ctx) {
+      try {
+        if (ctx.state === 'suspended') await ctx.resume();
+        const buf = await ctx.decodeAudioData(bytes.slice(0));
+        this.stop();
+        return new Promise((resolve) => {
+          const src = ctx.createBufferSource();
+          src.buffer = buf;
+          src.connect(ctx.destination);
+          src.onended = () => resolve();
+          this.cur = src;
+          src.start(0);
+        });
+      } catch (e) {
+        // fall through to the <audio> element path on decode/playback failure
+      }
+    }
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
     this.stop();
     return new Promise((resolve) => {
       const a = new Audio(url);
@@ -70,7 +110,9 @@ const Azure = {
   },
 
   stop() {
-    if (this.cur) { try { this.cur.pause(); } catch {} this.cur = null; }
+    if (!this.cur) return;
+    try { this.cur.stop ? this.cur.stop() : this.cur.pause(); } catch {}
+    this.cur = null;
   },
 
   loadSDK() {
@@ -128,3 +170,11 @@ const Azure = {
     });
   },
 };
+
+// Unlock audio on the first user interaction so Azure playback isn't blocked by
+// iOS Safari's autoplay policy. Runs on every gesture (cheap; no-op once ready).
+if (typeof document !== 'undefined') {
+  const unlock = () => Azure.unlock();
+  document.addEventListener('touchend', unlock, { passive: true });
+  document.addEventListener('mousedown', unlock);
+}
