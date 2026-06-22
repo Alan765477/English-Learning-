@@ -115,7 +115,13 @@ Rules:
     let [spoken, correction] = reply.split(/\n?---\n?/);
     spoken = (spoken || '').trim();
     correction = (correction || '').trim();
-    if (!spoken) { spoken = correction || reply || 'Sorry, could you say that again?'; correction = ''; }
+    if (!spoken && !correction) {
+      // AI returned nothing — almost always a provider/key mismatch.
+      this.setState('idle', '点麦克风再说一次');
+      this.warn('AI 没有返回内容：请到「设置」确认「AI 服务商」和「API Key」是同一家（Claude↔Claude key、DeepSeek↔DeepSeek key），且额度充足。');
+      return;
+    }
+    if (!spoken) { spoken = correction; correction = ''; }
     document.getElementById('ai-sub-ai').textContent = spoken;
     document.getElementById('ai-sub-corr').textContent = correction ? '📝 ' + correction : '';
     this.speak(spoken);
