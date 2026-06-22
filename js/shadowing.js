@@ -73,10 +73,14 @@ const Shadowing = {
 
     if (window.Azure && Azure.assessConfigured()) {
       this.mode = 'azure';
-      this.status('Azure 评分中… 请朗读这句');
+      this.azureAborted = false;
+      this.status('🎤 朗读中… 说完会自动评分，或点「结束跟读」立即结束');
       Azure.assess(this.cur().en)
         .then(r => { this.endActive(); this.showAzureScore(r); })
-        .catch(() => { this.endActive(); this.status('Azure 评分失败，请重试或检查 Key。'); });
+        .catch(() => {
+          this.endActive();
+          this.status(this.azureAborted ? '已结束（如需评分请重读一次）' : 'Azure 评分失败，请重试或检查 Key。');
+        });
       return;
     }
     if (Speech.recognitionSupported()) {
@@ -151,8 +155,11 @@ const Shadowing = {
       this.recorder = null;
       this.endActive();
       this.status('已录音，点「回放」对比你的发音');
+    } else if (this.mode === 'azure') {
+      // Stop the mic immediately; the assess promise rejects and resets the UI.
+      this.azureAborted = true;
+      if (window.Azure) Azure.stopAssess();
     }
-    // azure mode auto-stops on silence; nothing to do on release.
   },
 
   showScore(heard) {

@@ -145,9 +145,30 @@ const Wave = {
     el.innerHTML = html;
     el.dataset.filled = '1';
   },
-  run(el, promise) {
-    if (el) { this.fill(el); el.classList.add('active'); }
-    Promise.resolve(promise).finally(() => { if (el) el.classList.remove('active'); });
+  run(el, promise, levelFn) {
+    if (el) {
+      this.fill(el);
+      el.classList.add('active');
+      const bars = el.children;
+      let raf = 0;
+      // Use real audio levels if the analyser is available; otherwise keep the
+      // stylized CSS animation (levelFn returns null when Web Audio is absent).
+      if (levelFn && levelFn(bars.length)) {
+        el.classList.add('live'); // disables the CSS keyframe animation
+        const tick = () => {
+          const lv = levelFn(bars.length);
+          if (lv) for (let i = 0; i < bars.length; i++) bars[i].style.transform = 'scaleY(' + (0.18 + lv[i] * 0.95).toFixed(3) + ')';
+          raf = requestAnimationFrame(tick);
+        };
+        tick();
+      }
+      Promise.resolve(promise).finally(() => {
+        if (raf) cancelAnimationFrame(raf);
+        el.classList.remove('active', 'live');
+        for (const b of bars) b.style.transform = '';
+      });
+      return promise;
+    }
     return promise;
   },
 };
@@ -171,5 +192,18 @@ function toast(msg, ms = 5000) {
   clearTimeout(toast._t);
   toast._t = setTimeout(() => { el.style.opacity = '0'; }, ms);
 }
+
+// ---- Auto-update: silently reload when a newer build is deployed ----
+// Keep APP_BUILD in sync with the ?v=NN on the asset URLs in index.html.
+const APP_BUILD = 15;
+async function checkUpdate() {
+  try {
+    const html = await (await fetch('./index.html?_=' + Date.now(), { cache: 'no-store' })).text();
+    const m = html.match(/style\.css\?v=(\d+)/);
+    if (m && +m[1] !== APP_BUILD) location.reload();
+  } catch (e) { /* offline: ignore */ }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); });
+setTimeout(checkUpdate, 4000);
 
 window.addEventListener('DOMContentLoaded', () => App.init());

@@ -38,12 +38,22 @@ const Interpreter = {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
     rec.lang = 'en-US';
-    rec.continuous = true;
+    // Per-utterance mode: recognition ends on each pause, we translate that
+    // chunk immediately, then auto-restart. Far more real-time than continuous
+    // mode, which batches many sentences before finalizing (esp. iOS Safari).
+    rec.continuous = false;
     rec.interimResults = true;
     rec.onresult = (e) => this.onResult(e);
     rec.onerror = () => {};
-    rec.onend = () => { if (this.active) { try { rec.start(); } catch {} } };
+    rec.onend = () => {
+      if (this._idle) { clearTimeout(this._idle); this._idle = null; }
+      // Commit whatever was heard but never finalized (iOS sometimes ends
+      // without a final result).
+      if (this._pending) { this.addLine(this._pending); this._pending = ''; }
+      if (this.active) { try { rec.start(); } catch {} }
+    };
     this.rec = rec;
+    this._pending = '';
     this.active = true;
     try { rec.start(); } catch {}
     document.getElementById('interp-toggle').textContent = '⏹ 停止';
@@ -53,6 +63,8 @@ const Interpreter = {
 
   stop() {
     this.active = false;
+    if (this._idle) { clearTimeout(this._idle); this._idle = null; }
+    this._pending = '';
     if (this.rec) { try { this.rec.stop(); } catch {} this.rec = null; }
     document.getElementById('interp-toggle').textContent = '🎤 开始';
     document.getElementById('interp-toggle').classList.remove('recording');
@@ -66,12 +78,21 @@ const Interpreter = {
       const r = e.results[i];
       if (r.isFinal) {
         const text = r[0].transcript.trim();
-        if (text) this.addLine(text);
+        if (text) { this.addLine(text); this._pending = ''; }
       } else {
         interim += r[0].transcript;
       }
     }
     document.getElementById('interp-interim').textContent = interim;
+    this._pending = interim.trim();
+    // If the speaker pauses ~1.4s without a final result, commit the interim
+    // text now instead of waiting (keeps translation flowing in real time).
+    if (this._idle) clearTimeout(this._idle);
+    if (this._pending) {
+      this._idle = setTimeout(() => {
+        if (this.rec) { try { this.rec.stop(); } catch {} } // triggers onend → commit + restart
+      }, 1400);
+    }
   },
 
   async addLine(en) {

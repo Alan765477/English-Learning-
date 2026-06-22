@@ -74,7 +74,10 @@ const Listening = {
 
   play() {
     const p = Speech.speak(this.cur().en, Store.get('listenRate'));
-    if (window.Wave) Wave.run(document.getElementById('listen-wave'), p);
+    // Drive the waveform from the real audio when Azure is playing; otherwise
+    // fall back to the stylized CSS animation.
+    const live = (window.Azure && Azure.ttsConfigured()) ? ((n) => Azure.levels(n)) : null;
+    if (window.Wave) Wave.run(document.getElementById('listen-wave'), p, live);
   },
 
   move(d) {

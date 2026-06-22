@@ -11,6 +11,7 @@ const Azure = {
   cur: null,         // currently playing <audio> element
   _sdkPromise: null,
   _el: null,         // single reused <audio> element
+  _ctx: null, _analyser: null, _freq: null, _assessRec: null,
 
   ttsConfigured() {
     return !!(Store.get('azureKey') && Store.get('azureRegion'));
@@ -20,16 +21,51 @@ const Azure = {
     if (!this._el) {
       const a = new Audio();
       a.setAttribute('playsinline', '');
+      a.crossOrigin = 'anonymous';
       this._el = a;
     }
     return this._el;
   },
 
-  // iOS only lets audio start from inside a user tap, and Web Audio is silenced
-  // by the mute switch. So we reuse ONE <audio> element and "prime" it (play a
-  // silent clip) during the first tap. After that, iOS lets us play it later
-  // (post network fetch) and — being HTML media — it ignores the mute switch.
+  // Route the audio element through a Web Audio AnalyserNode so the on-screen
+  // waveform can react to the real voice. (Note: routing through Web Audio means
+  // playback follows the iOS mute switch — keep the ringer on to hear it.)
+  _graph() {
+    if (this._analyser !== null) return; // already attempted
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) { this._analyser = false; return; }
+    try {
+      this._ctx = this._ctx || new AC();
+      const src = this._ctx.createMediaElementSource(this._audioEl());
+      const an = this._ctx.createAnalyser();
+      an.fftSize = 64;
+      an.smoothingTimeConstant = 0.78;
+      src.connect(an);
+      an.connect(this._ctx.destination);
+      this._analyser = an;
+      this._freq = new Uint8Array(an.frequencyBinCount);
+    } catch (e) { this._analyser = false; }
+  },
+
+  // Real-time bar levels (0..1) for the waveform, or null if unavailable.
+  levels(n) {
+    const an = this._analyser;
+    if (!an || an === false) return null;
+    an.getByteFrequencyData(this._freq);
+    const usable = Math.floor(this._freq.length * 0.72);
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const idx = Math.floor((i / n) * usable);
+      out.push(Math.min(1, this._freq[idx] / 190));
+    }
+    return out;
+  },
+
+  // iOS only lets audio start from inside a user tap. Prime the element with a
+  // silent clip during the first tap and resume the audio graph.
   unlock() {
+    this._graph();
+    if (this._ctx && this._ctx.state === 'suspended') this._ctx.resume().catch(() => {});
     const a = this._audioEl();
     if (a._unlocked) return;
     try {
@@ -92,8 +128,9 @@ const Azure = {
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     this.stop();
-    // Reuse the element primed during unlock() so iOS plays it post-fetch and
-    // through the mute switch.
+    if (this._ctx && this._ctx.state === 'suspended') { try { await this._ctx.resume(); } catch {} }
+    // Reuse the element primed during unlock() so playback survives the network
+    // delay; it's routed through the analyser graph for the live waveform.
     const a = this._audioEl();
     a.src = url;
     return new Promise((resolve, reject) => {
@@ -136,8 +173,11 @@ const Azure = {
       (Store.get('azureKey') || '').replace(/\s+/g, ''),
       (Store.get('azureRegion') || '').trim().toLowerCase());
     cfg.speechRecognitionLanguage = 'en-US';
+    // Finish quickly once the learner stops talking (default is ~2s).
+    try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '700'); } catch {}
     const audio = SDK.AudioConfig.fromDefaultMicrophoneInput();
     const recognizer = new SDK.SpeechRecognizer(cfg, audio);
+    this._assessRec = recognizer;
     const pa = new SDK.PronunciationAssessmentConfig(
       reference,
       SDK.PronunciationAssessmentGradingSystem.HundredMark,
@@ -147,6 +187,7 @@ const Azure = {
     pa.applyTo(recognizer);
     return new Promise((resolve, reject) => {
       recognizer.recognizeOnceAsync((result) => {
+        this._assessRec = null;
         try {
           const r = SDK.PronunciationAssessmentResult.fromResult(result);
           const words = ((r.detailResult && r.detailResult.Words) || []).map(w => ({
@@ -166,8 +207,13 @@ const Azure = {
         } finally {
           recognizer.close();
         }
-      }, (err) => { recognizer.close(); reject(new Error(err)); });
+      }, (err) => { this._assessRec = null; recognizer.close(); reject(new Error(err)); });
     });
+  },
+
+  // Abort an in-flight pronunciation assessment (manual "stop" button).
+  stopAssess() {
+    if (this._assessRec) { try { this._assessRec.close(); } catch {} this._assessRec = null; }
   },
 };
 
