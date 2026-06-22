@@ -84,13 +84,13 @@ const App = {
         setTimeout(() => tip.classList.add('hidden'), 3500);
         return;
       }
-      show('正在测试 Azure 神经语音…（v9）', true);
+      show('正在测试 Azure 神经语音…（v10）', true);
       try {
         await Azure.speak('Azure neural voice is ready.', 1);
-        show('✅ Azure 神经语音可用！以后朗读都会用自然音色。（v9）', true);
+        show('✅ Azure 神经语音可用！以后朗读都会用自然音色。（v10）', true);
         setTimeout(() => tip.classList.add('hidden'), 4000);
       } catch (e) {
-        show('❌ ' + (e.message || 'Azure 连接失败') + '。（暂时仍用浏览器语音）（v9）', false);
+        show('❌ ' + (e.message || 'Azure 连接失败') + '。（暂时仍用浏览器语音）（v10）', false);
       }
     };
 
@@ -115,8 +115,15 @@ const App = {
   },
 
   registerSW() {
+    // The service-worker offline cache kept pinning old builds on iOS, causing
+    // endless "still the old version" problems. We now actively REMOVE it and
+    // wipe its caches so the app always loads the latest code from the network.
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.getRegistrations()
+        .then(regs => regs.forEach(r => r.unregister())).catch(() => {});
+    }
+    if (window.caches && caches.keys) {
+      caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
     }
   },
 };
