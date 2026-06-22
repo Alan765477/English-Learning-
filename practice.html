@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>英语跟读练习（干净版）</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    margin: 0; padding: 16px; background: #0f1220; color: #eef0f6; }
+  .wrap { max-width: 620px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  .ver { color: #8b90a3; font-size: 12px; margin-bottom: 14px; }
+  .card { background: #1a1f33; border: 1px solid #2a3050; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  label { font-size: 13px; color: #aeb3c7; display: block; margin-bottom: 5px; }
+  input, select { width: 100%; padding: 11px 12px; border: 1px solid #38406a; border-radius: 9px;
+    font-size: 16px; background: #11152a; color: #fff; margin-bottom: 10px; }
+  button { border: none; border-radius: 10px; padding: 13px 18px; font-size: 16px; font-weight: 700;
+    color: #fff; background: #4f46e5; cursor: pointer; }
+  button.sec { background: #313a63; }
+  button:active { opacity: .8; }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  .sentence { font-size: 24px; line-height: 1.5; margin: 6px 0 4px; }
+  .zh { color: #aeb3c7; font-size: 15px; margin-bottom: 14px; }
+  .prog { color: #8b90a3; font-size: 13px; margin-bottom: 8px; }
+  #status { font-size: 14px; margin-top: 12px; min-height: 20px; line-height: 1.5; }
+  details { margin-bottom: 14px; }
+  summary { color: #9aa0bd; font-size: 14px; cursor: pointer; }
+  .ok { color: #46d17f; } .bad { color: #ff6b6b; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎧 英语跟读练习</h1>
+  <div class="ver">干净版 · 无缓存 · build 1</div>
+
+  <details id="setup">
+    <summary>⚙️ Azure 设置（点开填一次，自动记住）</summary>
+    <div class="card" style="margin-top:10px">
+      <label>Azure 语音 Key</label>
+      <input id="key" type="password" placeholder="粘贴 KEY 1" autocomplete="off" />
+      <label>区域 Region（小写，如 eastasia）</label>
+      <input id="region" type="text" placeholder="eastasia" autocomplete="off" autocapitalize="off" />
+      <label>音色</label>
+      <select id="voice">
+        <option value="en-US-AvaMultilingualNeural">Ava（美音·自然女声）</option>
+        <option value="en-US-JennyNeural">Jenny（美音·女）</option>
+        <option value="en-US-GuyNeural">Guy（美音·男）</option>
+        <option value="en-GB-SoniaNeural">Sonia（英音·女）</option>
+        <option value="en-GB-RyanNeural">Ryan（英音·男）</option>
+      </select>
+      <button id="save">保存并测试声音</button>
+    </div>
+  </details>
+
+  <div class="card">
+    <div class="prog" id="prog">1 / 1</div>
+    <div class="sentence" id="en">…</div>
+    <div class="zh" id="zh"></div>
+    <div class="row">
+      <button class="sec" id="prev">◀ 上一句</button>
+      <button id="play">🔊 播放</button>
+      <button class="sec" id="next">下一句 ▶</button>
+    </div>
+    <div id="status"></div>
+  </div>
+</div>
+
+<script>
+// ===== 极简、单文件、无 Service Worker、无模块。绕开一切缓存问题。 =====
+const $ = id => document.getElementById(id);
+
+const SENTENCES = [
+  { en: "Hey, it's been a while! How have you been?", zh: "嘿，好久不见！你最近怎么样？" },
+  { en: "Pretty good, thanks. I've been really busy with work.", zh: "挺好的，谢谢。我最近工作很忙。" },
+  { en: "We should grab a coffee sometime.", zh: "我们改天该一起喝杯咖啡。" },
+  { en: "Could you please tell me how to get to the station?", zh: "请问你能告诉我怎么去车站吗？" },
+  { en: "I'll have a sparkling water, please.", zh: "请给我一杯气泡水。" },
+  { en: "That sounds perfect. I'll go with that.", zh: "听起来很棒，我就要那个。" },
+  { en: "Thanks for letting me know. No worries at all.", zh: "谢谢你告诉我，完全没关系。" },
+];
+
+// ---- 设置存取（本页 localStorage，简单可靠）----
+const LS = 'clean_azure';
+function load() { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } }
+function save(o) { try { localStorage.setItem(LS, JSON.stringify(o)); } catch {} }
+let cfg = load();
+$('key').value = cfg.key || '';
+$('region').value = cfg.region || '';
+$('voice').value = cfg.voice || 'en-US-AvaMultilingualNeural';
+if (!cfg.key) $('setup').open = true;   // 没配过就自动展开设置
+
+// ---- iOS 音频：一个复用的 <audio>，首次点击时用静音片段“解锁” ----
+const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+let audioEl = null, unlocked = false;
+function getAudio() {
+  if (!audioEl) { audioEl = new Audio(); audioEl.setAttribute('playsinline', ''); }
+  return audioEl;
+}
+function unlock() {
+  if (unlocked) return;
+  const a = getAudio();
+  try { a.src = SILENT; const p = a.play();
+    if (p) p.then(() => { a.pause(); a.currentTime = 0; unlocked = true; }).catch(() => {}); }
+  catch {}
+}
+document.addEventListener('touchend', unlock, { passive: true });
+document.addEventListener('click', unlock);
+
+// ---- Azure 朗读 ----
+function esc(s){return s.replace(/[<>&'"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;',"'":'&apos;','"':'&quot;'}[c]));}
+function reason(s){return ({401:'Key 无效(401)，检查是否复制完整',403:'区域/额度问题(403)，确认区域和Key同一资源',404:'区域不存在(404)，区域名拼错',400:'请求有误(400)'}[s])||('失败('+s+')');}
+
+async function speakAzure(text) {
+  const key = (cfg.key||'').replace(/\s+/g,'');
+  const region = (cfg.region||'').trim().toLowerCase();
+  const voice = cfg.voice || 'en-US-AvaMultilingualNeural';
+  if (!key || !region) throw new Error('还没填 Key 或区域');
+  const ssml = `<speak version='1.0' xml:lang='en-US'><voice name='${voice}'>${esc(text)}</voice></speak>`;
+  let res;
+  try {
+    res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+      method: 'POST',
+      headers: { 'Ocp-Apim-Subscription-Key': key, 'Content-Type': 'application/ssml+xml',
+        'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3' },
+      body: ssml,
+    });
+  } catch { throw new Error('连不上 Azure（区域填错或网络问题）'); }
+  if (!res.ok) throw new Error(reason(res.status));
+  const url = URL.createObjectURL(await res.blob());
+  const a = getAudio();
+  a.src = url;
+  await a.play().catch(() => { throw new Error('iPhone 拦截了播放（先点一下屏幕、并关掉静音键）'); });
+}
+
+function setStatus(msg, cls) { $('status').textContent = msg; $('status').className = cls || ''; }
+
+// ---- 朗读当前句：先试 Azure，失败再退浏览器音并说明原因 ----
+async function playCurrent() {
+  const s = SENTENCES[idx];
+  setStatus('正在用 Azure 朗读…');
+  try {
+    await speakAzure(s.en);
+    setStatus('🔊 Azure 自然音', 'ok');
+  } catch (e) {
+    setStatus('⚠️ ' + e.message + '（暂用手机自带音）', 'bad');
+    browserSpeak(s.en);
+  }
+}
+function browserSpeak(text) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  speechSynthesis.speak(u);
+}
+
+// ---- 句子导航 ----
+let idx = 0;
+function render() {
+  const s = SENTENCES[idx];
+  $('en').textContent = s.en;
+  $('zh').textContent = s.zh;
+  $('prog').textContent = (idx + 1) + ' / ' + SENTENCES.length;
+}
+$('play').onclick = playCurrent;
+$('prev').onclick = () => { idx = (idx - 1 + SENTENCES.length) % SENTENCES.length; render(); playCurrent(); };
+$('next').onclick = () => { idx = (idx + 1) % SENTENCES.length; render(); playCurrent(); };
+
+// ---- 保存设置并测试 ----
+$('save').onclick = async () => {
+  cfg = { key: $('key').value.replace(/\s+/g,''), region: $('region').value.trim().toLowerCase(), voice: $('voice').value };
+  save(cfg);
+  setStatus('正在测试 Azure…');
+  try {
+    await speakAzure('Azure neural voice is ready.');
+    setStatus('✅ Azure 神经语音可用！以后播放都是自然音。', 'ok');
+  } catch (e) {
+    setStatus('❌ ' + e.message, 'bad');
+  }
+};
+
+render();
+</script>
+</body>
+</html>
