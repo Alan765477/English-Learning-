@@ -171,6 +171,11 @@ const Azure = {
   },
 };
 
+// `const Azure` does NOT become a property of window, so other scripts that
+// check `window.Azure` (e.g. speech.js) saw it as missing and always fell back
+// to the browser voice. Attach it explicitly so those checks work.
+window.Azure = Azure;
+
 // Unlock audio on the first user interaction so Azure playback isn't blocked by
 // iOS Safari's autoplay policy. Runs on every gesture (cheap; no-op once ready).
 if (typeof document !== 'undefined') {
