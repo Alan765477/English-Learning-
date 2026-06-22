@@ -19,6 +19,19 @@ const Azure = {
     return s.replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
   },
 
+  // Turn an Azure HTTP status into a plain-language Chinese reason so failures
+  // are visible instead of silently falling back to the robotic browser voice.
+  _httpReason(status) {
+    const map = {
+      400: '请求有误(400)——音色名可能拼错',
+      401: 'Key 无效(401)——检查 Key 是否复制完整、有没有多余空格',
+      403: '没权限/额度用尽(403)——确认区域(Region)和 Key 是同一个资源，且免费额度未用完',
+      404: '区域不存在(404)——区域名拼错了，如 eastus、southeastasia',
+      429: '请求太频繁(429)——稍等几秒再试',
+    };
+    return map[status] || ('Azure 请求失败(' + status + ')');
+  },
+
   async speak(text, rate = 1) {
     const key = Store.get('azureKey');
     const region = Store.get('azureRegion');
@@ -28,16 +41,22 @@ const Azure = {
     const ssml =
       `<speak version='1.0' xml:lang='en-US'><voice name='${voice}'>` +
       `<prosody rate='${rateStr}'>${this._escape(text)}</prosody></voice></speak>`;
-    const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
-      method: 'POST',
-      headers: {
-        'Ocp-Apim-Subscription-Key': key,
-        'Content-Type': 'application/ssml+xml',
-        'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
-      },
-      body: ssml,
-    });
-    if (!res.ok) throw new Error('Azure TTS ' + res.status);
+    let res;
+    try {
+      res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+        method: 'POST',
+        headers: {
+          'Ocp-Apim-Subscription-Key': key,
+          'Content-Type': 'application/ssml+xml',
+          'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
+        },
+        body: ssml,
+      });
+    } catch (err) {
+      // fetch 直接抛错 = 网络打不通（区域名拼错会导致域名解析失败，最常见）
+      throw new Error('连不上 Azure——多半是区域(Region)填错，或网络问题');
+    }
+    if (!res.ok) throw new Error(this._httpReason(res.status));
     const url = URL.createObjectURL(await res.blob());
     this.stop();
     return new Promise((resolve) => {

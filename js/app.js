@@ -62,16 +62,34 @@ const App = {
     azKey.value = Store.get('azureKey');
     azRegion.value = Store.get('azureRegion');
     azVoice.value = Store.get('azureVoice');
-    document.getElementById('set-azure-save').onclick = () => {
+    document.getElementById('set-azure-save').onclick = async () => {
       Store.setAll({
         azureKey: azKey.value.trim(),
         azureRegion: azRegion.value.trim(),
         azureVoice: azVoice.value,
       });
       const tip = document.getElementById('set-azure-saved');
-      tip.classList.remove('hidden');
-      setTimeout(() => tip.classList.add('hidden'), 2000);
-      Speech.speak('Azure neural voice is ready.', 1);
+      const show = (msg, ok) => {
+        tip.textContent = msg;
+        tip.style.color = ok ? '' : '#d6453d';
+        tip.classList.remove('hidden');
+      };
+      // Test Azure directly (NOT Speech.speak, which silently falls back to the
+      // browser voice). This way a wrong key/region surfaces a clear error
+      // instead of leaving the user wondering why it still sounds robotic.
+      if (!Store.get('azureKey') || !Store.get('azureRegion')) {
+        show('已保存。未填 Key 或区域，将使用免费的浏览器语音。', true);
+        setTimeout(() => tip.classList.add('hidden'), 3500);
+        return;
+      }
+      show('正在测试 Azure 神经语音…', true);
+      try {
+        await Azure.speak('Azure neural voice is ready.', 1);
+        show('✅ Azure 神经语音可用！以后朗读都会用自然音色。', true);
+        setTimeout(() => tip.classList.add('hidden'), 3000);
+      } catch (e) {
+        show('❌ ' + (e.message || 'Azure 连接失败') + '。（暂时仍用浏览器语音）', false);
+      }
     };
 
     // Voice picker (populated once voices load).
