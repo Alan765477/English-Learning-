@@ -84,13 +84,13 @@ const App = {
         setTimeout(() => tip.classList.add('hidden'), 3500);
         return;
       }
-      show('正在测试 Azure 神经语音…（v6）', true);
+      show('正在测试 Azure 神经语音…（v7）', true);
       try {
         await Azure.speak('Azure neural voice is ready.', 1);
-        show('✅ Azure 神经语音可用！以后朗读都会用自然音色。（v6）', true);
+        show('✅ Azure 神经语音可用！以后朗读都会用自然音色。（v7）', true);
         setTimeout(() => tip.classList.add('hidden'), 4000);
       } catch (e) {
-        show('❌ ' + (e.message || 'Azure 连接失败') + '。（暂时仍用浏览器语音）（v6）', false);
+        show('❌ ' + (e.message || 'Azure 连接失败') + '。（暂时仍用浏览器语音）（v7）', false);
       }
     };
 
@@ -120,5 +120,24 @@ const App = {
     }
   },
 };
+
+// Lightweight on-screen toast so playback/diagnostic messages are visible on
+// mobile (where there's no console to inspect).
+function toast(msg, ms = 5000) {
+  let el = document.getElementById('app-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-toast';
+    el.style.cssText =
+      'position:fixed;left:50%;bottom:84px;transform:translateX(-50%);max-width:90%;' +
+      'background:#1f2330;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;' +
+      'line-height:1.4;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.3);text-align:center;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.style.opacity = '0'; }, ms);
+}
 
 window.addEventListener('DOMContentLoaded', () => App.init());

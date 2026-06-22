@@ -41,7 +41,11 @@ const Speech = {
   speak(text, rate = 1) {
     // Use Azure neural voice when configured; otherwise the free browser voice.
     if (window.Azure && Azure.ttsConfigured()) {
-      return Azure.speak(text, rate).catch(() => this._browserSpeak(text, rate));
+      return Azure.speak(text, rate).catch((e) => {
+        // Make the silent fallback visible so we can see WHY Azure was skipped.
+        if (window.toast) toast('⚠️ Azure 朗读失败，暂用浏览器音：' + ((e && e.message) || e));
+        return this._browserSpeak(text, rate);
+      });
     }
     return this._browserSpeak(text, rate);
   },
