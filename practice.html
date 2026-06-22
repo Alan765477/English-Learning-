@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>英语跟读练习（干净版）</title>
 <style>
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: rgba(255,255,255,.1); }
   body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
     margin: 0; padding: 16px; background: #0f1220; color: #eef0f6; }
   .wrap { max-width: 620px; margin: 0 auto; }
@@ -13,62 +13,60 @@
   .ver { color: #8b90a3; font-size: 12px; margin-bottom: 14px; }
   .card { background: #1a1f33; border: 1px solid #2a3050; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
   label { font-size: 13px; color: #aeb3c7; display: block; margin-bottom: 5px; }
-  input, select { width: 100%; padding: 11px 12px; border: 1px solid #38406a; border-radius: 9px;
-    font-size: 16px; background: #11152a; color: #fff; margin-bottom: 10px; }
-  button { border: none; border-radius: 10px; padding: 13px 18px; font-size: 16px; font-weight: 700;
-    color: #fff; background: #4f46e5; cursor: pointer; }
-  button.sec { background: #313a63; }
-  button:active { opacity: .8; }
+  input, select { width: 100%; padding: 12px; border: 1px solid #38406a; border-radius: 9px;
+    font-size: 16px; background: #11152a; color: #fff; margin-bottom: 12px; }
+  button { display: block; width: 100%; border: none; border-radius: 12px; padding: 16px;
+    font-size: 17px; font-weight: 700; color: #fff; background: #4f46e5; cursor: pointer; margin-bottom: 10px; }
+  button.sec { background: #313a63; font-size: 15px; padding: 13px; }
+  button:active { opacity: .7; }
   .row { display: flex; gap: 10px; }
-  .row > * { flex: 1; }
-  .sentence { font-size: 24px; line-height: 1.5; margin: 6px 0 4px; }
+  .row > button { margin-bottom: 0; }
+  .sentence { font-size: 24px; line-height: 1.5; margin: 4px 0; }
   .zh { color: #aeb3c7; font-size: 15px; margin-bottom: 14px; }
   .prog { color: #8b90a3; font-size: 13px; margin-bottom: 8px; }
-  #status { font-size: 14px; margin-top: 12px; min-height: 20px; line-height: 1.5; }
-  details { margin-bottom: 14px; }
-  summary { color: #9aa0bd; font-size: 14px; cursor: pointer; }
-  .ok { color: #46d17f; } .bad { color: #ff6b6b; }
+  #status { font-size: 15px; margin-top: 14px; min-height: 22px; line-height: 1.5; font-weight: 600; }
+  .ok { color: #46d17f; } .bad { color: #ff6b6b; } .muted { color: #8b90a3; font-weight: 400; }
+  h2 { font-size: 15px; margin: 0 0 12px; color: #cdd2e6; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>🎧 英语跟读练习</h1>
-  <div class="ver">干净版 · 无缓存 · build 1</div>
-
-  <details id="setup">
-    <summary>⚙️ Azure 设置（点开填一次，自动记住）</summary>
-    <div class="card" style="margin-top:10px">
-      <label>Azure 语音 Key</label>
-      <input id="key" type="password" placeholder="粘贴 KEY 1" autocomplete="off" />
-      <label>区域 Region（小写，如 eastasia）</label>
-      <input id="region" type="text" placeholder="eastasia" autocomplete="off" autocapitalize="off" />
-      <label>音色</label>
-      <select id="voice">
-        <option value="en-US-AvaMultilingualNeural">Ava（美音·自然女声）</option>
-        <option value="en-US-JennyNeural">Jenny（美音·女）</option>
-        <option value="en-US-GuyNeural">Guy（美音·男）</option>
-        <option value="en-GB-SoniaNeural">Sonia（英音·女）</option>
-        <option value="en-GB-RyanNeural">Ryan（英音·男）</option>
-      </select>
-      <button id="save">保存并测试声音</button>
-    </div>
-  </details>
+  <div class="ver">干净版 · 无缓存 · build 2</div>
 
   <div class="card">
+    <h2>① Azure 设置（填一次，自动记住）</h2>
+    <label>Azure 语音 Key</label>
+    <input id="key" type="text" placeholder="粘贴 KEY 1" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+    <label>区域 Region（小写，如 eastasia）</label>
+    <input id="region" type="text" placeholder="eastasia" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+    <label>音色</label>
+    <select id="voice">
+      <option value="en-US-AvaMultilingualNeural">Ava（美音·自然女声）</option>
+      <option value="en-US-JennyNeural">Jenny（美音·女）</option>
+      <option value="en-US-GuyNeural">Guy（美音·男）</option>
+      <option value="en-GB-SoniaNeural">Sonia（英音·女）</option>
+      <option value="en-GB-RyanNeural">Ryan（英音·男）</option>
+    </select>
+    <button id="test">🔈 测试声音</button>
+  </div>
+
+  <div class="card">
+    <h2>② 跟读练习</h2>
     <div class="prog" id="prog">1 / 1</div>
     <div class="sentence" id="en">…</div>
     <div class="zh" id="zh"></div>
+    <button id="play">🔊 播放这一句</button>
     <div class="row">
       <button class="sec" id="prev">◀ 上一句</button>
-      <button id="play">🔊 播放</button>
       <button class="sec" id="next">下一句 ▶</button>
     </div>
-    <div id="status"></div>
+    <div id="status" class="muted">填好上面的 Key 后，点「播放这一句」。</div>
   </div>
 </div>
 
 <script>
-// ===== 极简、单文件、无 Service Worker、无模块。绕开一切缓存问题。 =====
+// ===== 极简单文件，无 Service Worker、无模块。播放按钮直接读取输入框，免去“先保存”。 =====
 const $ = id => document.getElementById(id);
 
 const SENTENCES = [
@@ -81,29 +79,33 @@ const SENTENCES = [
   { en: "Thanks for letting me know. No worries at all.", zh: "谢谢你告诉我，完全没关系。" },
 ];
 
-// ---- 设置存取（本页 localStorage，简单可靠）----
+// ---- 记住设置 ----
 const LS = 'clean_azure';
-function load() { try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } }
-function save(o) { try { localStorage.setItem(LS, JSON.stringify(o)); } catch {} }
-let cfg = load();
-$('key').value = cfg.key || '';
-$('region').value = cfg.region || '';
-$('voice').value = cfg.voice || 'en-US-AvaMultilingualNeural';
-if (!cfg.key) $('setup').open = true;   // 没配过就自动展开设置
+function loadCfg(){ try { return JSON.parse(localStorage.getItem(LS)) || {}; } catch { return {}; } }
+const saved = loadCfg();
+$('key').value = saved.key || '';
+$('region').value = saved.region || '';
+$('voice').value = saved.voice || 'en-US-AvaMultilingualNeural';
 
-// ---- iOS 音频：一个复用的 <audio>，首次点击时用静音片段“解锁” ----
+// 每次都直接从输入框读取（并顺手保存），所以不存在“忘了保存”
+function readCfg() {
+  const cfg = {
+    key: $('key').value.replace(/\s+/g, ''),
+    region: $('region').value.trim().toLowerCase(),
+    voice: $('voice').value,
+  };
+  try { localStorage.setItem(LS, JSON.stringify(cfg)); } catch {}
+  return cfg;
+}
+
+// ---- iOS 音频解锁（首次触摸用静音片段，复用一个 <audio>）----
 const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
 let audioEl = null, unlocked = false;
-function getAudio() {
-  if (!audioEl) { audioEl = new Audio(); audioEl.setAttribute('playsinline', ''); }
-  return audioEl;
-}
-function unlock() {
+function getAudio(){ if(!audioEl){ audioEl = new Audio(); audioEl.setAttribute('playsinline',''); } return audioEl; }
+function unlock(){
   if (unlocked) return;
   const a = getAudio();
-  try { a.src = SILENT; const p = a.play();
-    if (p) p.then(() => { a.pause(); a.currentTime = 0; unlocked = true; }).catch(() => {}); }
-  catch {}
+  try { a.src = SILENT; const p = a.play(); if (p) p.then(()=>{a.pause();a.currentTime=0;unlocked=true;}).catch(()=>{}); } catch {}
 }
 document.addEventListener('touchend', unlock, { passive: true });
 document.addEventListener('click', unlock);
@@ -112,17 +114,14 @@ document.addEventListener('click', unlock);
 function esc(s){return s.replace(/[<>&'"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;',"'":'&apos;','"':'&quot;'}[c]));}
 function reason(s){return ({401:'Key 无效(401)，检查是否复制完整',403:'区域/额度问题(403)，确认区域和Key同一资源',404:'区域不存在(404)，区域名拼错',400:'请求有误(400)'}[s])||('失败('+s+')');}
 
-async function speakAzure(text) {
-  const key = (cfg.key||'').replace(/\s+/g,'');
-  const region = (cfg.region||'').trim().toLowerCase();
-  const voice = cfg.voice || 'en-US-AvaMultilingualNeural';
-  if (!key || !region) throw new Error('还没填 Key 或区域');
-  const ssml = `<speak version='1.0' xml:lang='en-US'><voice name='${voice}'>${esc(text)}</voice></speak>`;
+async function speakAzure(text, cfg) {
+  if (!cfg.key || !cfg.region) throw new Error('还没填 Key 或区域');
+  const ssml = `<speak version='1.0' xml:lang='en-US'><voice name='${cfg.voice}'>${esc(text)}</voice></speak>`;
   let res;
   try {
-    res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+    res = await fetch(`https://${cfg.region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
       method: 'POST',
-      headers: { 'Ocp-Apim-Subscription-Key': key, 'Content-Type': 'application/ssml+xml',
+      headers: { 'Ocp-Apim-Subscription-Key': cfg.key, 'Content-Type': 'application/ssml+xml',
         'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3' },
       body: ssml,
     });
@@ -134,52 +133,29 @@ async function speakAzure(text) {
   await a.play().catch(() => { throw new Error('iPhone 拦截了播放（先点一下屏幕、并关掉静音键）'); });
 }
 
-function setStatus(msg, cls) { $('status').textContent = msg; $('status').className = cls || ''; }
+function setStatus(msg, cls){ $('status').textContent = msg; $('status').className = cls || ''; }
+function browserSpeak(text){ if(!('speechSynthesis' in window))return; speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text); u.lang='en-US'; speechSynthesis.speak(u); }
 
-// ---- 朗读当前句：先试 Azure，失败再退浏览器音并说明原因 ----
-async function playCurrent() {
-  const s = SENTENCES[idx];
-  setStatus('正在用 Azure 朗读…');
+async function speakText(text) {
+  const cfg = readCfg();
+  setStatus('正在用 Azure 朗读…', 'muted');
   try {
-    await speakAzure(s.en);
+    await speakAzure(text, cfg);
     setStatus('🔊 Azure 自然音', 'ok');
   } catch (e) {
     setStatus('⚠️ ' + e.message + '（暂用手机自带音）', 'bad');
-    browserSpeak(s.en);
+    browserSpeak(text);
   }
-}
-function browserSpeak(text) {
-  if (!('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US';
-  speechSynthesis.speak(u);
 }
 
 // ---- 句子导航 ----
 let idx = 0;
-function render() {
-  const s = SENTENCES[idx];
-  $('en').textContent = s.en;
-  $('zh').textContent = s.zh;
-  $('prog').textContent = (idx + 1) + ' / ' + SENTENCES.length;
-}
-$('play').onclick = playCurrent;
-$('prev').onclick = () => { idx = (idx - 1 + SENTENCES.length) % SENTENCES.length; render(); playCurrent(); };
-$('next').onclick = () => { idx = (idx + 1) % SENTENCES.length; render(); playCurrent(); };
-
-// ---- 保存设置并测试 ----
-$('save').onclick = async () => {
-  cfg = { key: $('key').value.replace(/\s+/g,''), region: $('region').value.trim().toLowerCase(), voice: $('voice').value };
-  save(cfg);
-  setStatus('正在测试 Azure…');
-  try {
-    await speakAzure('Azure neural voice is ready.');
-    setStatus('✅ Azure 神经语音可用！以后播放都是自然音。', 'ok');
-  } catch (e) {
-    setStatus('❌ ' + e.message, 'bad');
-  }
-};
+function render(){ const s=SENTENCES[idx]; $('en').textContent=s.en; $('zh').textContent=s.zh; $('prog').textContent=(idx+1)+' / '+SENTENCES.length; }
+$('play').onclick = () => speakText(SENTENCES[idx].en);
+$('prev').onclick = () => { idx=(idx-1+SENTENCES.length)%SENTENCES.length; render(); speakText(SENTENCES[idx].en); };
+$('next').onclick = () => { idx=(idx+1)%SENTENCES.length; render(); speakText(SENTENCES[idx].en); };
+$('test').onclick = () => speakText('Azure neural voice is ready.');
 
 render();
 </script>
