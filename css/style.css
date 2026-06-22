@@ -200,8 +200,15 @@ html, body {
 #view-ai { display: none; flex-direction: column; }
 #view-ai:not(.hidden) { display: flex; }
 .ai-chat { flex: 1; overflow-y: auto; padding: 8px 2px; display: flex; flex-direction: column; gap: 10px; }
-.ai-empty { text-align: center; color: var(--text-dim); padding: 30px 10px; line-height: 1.6; }
-.topic-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 20px; }
+.ai-empty {
+  text-align: center; color: var(--text-dim); line-height: 1.6;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 56vh; gap: 2px;
+}
+.orb { width: 188px; height: 188px; margin-bottom: 10px; }
+.hero-title { font-size: 22px; font-weight: 680; color: var(--text); letter-spacing: -0.02em; }
+.hero-sub { font-size: 14px; color: var(--text-dim); margin-top: 2px; }
+.topic-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 22px; max-width: 320px; }
 .bubble { max-width: 82%; padding: 11px 15px; border-radius: 20px; font-size: 16px; line-height: 1.45; white-space: pre-wrap; }
 .bubble.user { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 6px; }
 .bubble.ai { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 6px; }
