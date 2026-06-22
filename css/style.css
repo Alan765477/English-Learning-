@@ -285,4 +285,5 @@ html, body {
   transition: color .15s;
 }
 .tab span { font-size: 22px; }
+.tab svg { width: 26px; height: 26px; display: block; }
 .tab.active { color: var(--primary); }
