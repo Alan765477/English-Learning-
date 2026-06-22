@@ -4,30 +4,43 @@
 //   - Pronunciation Assessment via the Speech SDK (loaded on demand)
 // Everything degrades gracefully: if Azure isn't configured or a call fails,
 // the app falls back to the free browser speech features.
+// A tiny silent WAV used to "prime" the audio element inside a user gesture.
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
 const Azure = {
-  cur: null,         // currently playing source (Web Audio BufferSource or <audio>)
+  cur: null,         // currently playing <audio> element
   _sdkPromise: null,
-  _ctx: null,        // shared AudioContext (needed to beat iOS autoplay rules)
+  _el: null,         // single reused <audio> element
 
   ttsConfigured() {
     return !!(Store.get('azureKey') && Store.get('azureRegion'));
   },
 
-  _audioCtx() {
-    if (!this._ctx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) this._ctx = new AC();
+  _audioEl() {
+    if (!this._el) {
+      const a = new Audio();
+      a.setAttribute('playsinline', '');
+      this._el = a;
     }
-    return this._ctx;
+    return this._el;
   },
 
-  // iOS Safari only lets audio start from inside a user tap. Azure audio is
-  // fetched over the network first, so by the time it plays the "tap" is over
-  // and iOS blocks it. Resuming the AudioContext during the tap unlocks it for
-  // the rest of the session; we wire this to the first touch/click below.
+  // iOS only lets audio start from inside a user tap, and Web Audio is silenced
+  // by the mute switch. So we reuse ONE <audio> element and "prime" it (play a
+  // silent clip) during the first tap. After that, iOS lets us play it later
+  // (post network fetch) and — being HTML media — it ignores the mute switch.
   unlock() {
-    const ctx = this._audioCtx();
-    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const a = this._audioEl();
+    if (a._unlocked) return;
+    try {
+      a.src = SILENT_WAV;
+      const p = a.play();
+      if (p && p.then) {
+        p.then(() => { a.pause(); a.currentTime = 0; a._unlocked = true; }).catch(() => {});
+      } else {
+        a._unlocked = true;
+      }
+    } catch (e) { /* ignore */ }
   },
   assessConfigured() {
     return this.ttsConfigured();
@@ -76,42 +89,29 @@ const Azure = {
     }
     if (!res.ok) throw new Error(this._httpReason(res.status));
 
-    const bytes = await res.arrayBuffer();
-    const ctx = this._audioCtx();
-    // Preferred path: Web Audio. Once the context is unlocked in a tap it keeps
-    // playing even after the network delay, so iOS won't silence Azure.
-    if (ctx) {
-      try {
-        if (ctx.state === 'suspended') await ctx.resume();
-        const buf = await ctx.decodeAudioData(bytes.slice(0));
-        this.stop();
-        return new Promise((resolve) => {
-          const src = ctx.createBufferSource();
-          src.buffer = buf;
-          src.connect(ctx.destination);
-          src.onended = () => resolve();
-          this.cur = src;
-          src.start(0);
-        });
-      } catch (e) {
-        // fall through to the <audio> element path on decode/playback failure
-      }
-    }
-    const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
     this.stop();
-    return new Promise((resolve) => {
-      const a = new Audio(url);
+    // Reuse the element primed during unlock() so iOS plays it post-fetch and
+    // through the mute switch.
+    const a = this._audioEl();
+    a.src = url;
+    return new Promise((resolve, reject) => {
       this.cur = a;
-      const done = () => { URL.revokeObjectURL(url); resolve(); };
+      let settled = false;
+      const done = () => { if (settled) return; settled = true; URL.revokeObjectURL(url); resolve(); };
       a.onended = done;
       a.onerror = done;
-      a.play().catch(done);
+      a.play().then(() => {}).catch((e) => {
+        if (settled) return; settled = true; URL.revokeObjectURL(url);
+        reject(new Error('iPhone 拦截了播放（请确认已先点过屏幕、且未静音）'));
+      });
     });
   },
 
   stop() {
     if (!this.cur) return;
-    try { this.cur.stop ? this.cur.stop() : this.cur.pause(); } catch {}
+    try { this.cur.pause(); } catch {}
     this.cur = null;
   },
 

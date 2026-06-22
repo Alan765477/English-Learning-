@@ -42,14 +42,19 @@ const Speech = {
     // Use Azure neural voice when configured; otherwise the free browser voice.
     if (window.Azure && Azure.ttsConfigured()) {
       return Azure.speak(text, rate).then(() => {
-        if (window.toast) toast('🔊 正在用 Azure 自然音 (v8)');
+        if (window.toast) toast('🔊 正在用 Azure 自然音 (v9)');
       }).catch((e) => {
         // Make the silent fallback visible so we can see WHY Azure was skipped.
-        if (window.toast) toast('⚠️ 退回浏览器音 (v8)：' + ((e && e.message) || e));
+        if (window.toast) toast('⚠️ 退回浏览器音 (v9)：' + ((e && e.message) || e));
         return this._browserSpeak(text, rate);
       });
     }
-    if (window.toast) toast('ℹ️ 未配置 Azure，用浏览器音 (v8)');
+    if (window.toast) {
+      const kl = (Store.get('azureKey') || '').length;
+      const rg = Store.get('azureRegion') || '空';
+      const hasA = window.Azure ? '有' : '无';
+      toast(`ℹ️ 未走Azure (v9)：Azure对象=${hasA}, Key长度=${kl}, 区域=${rg}`);
+    }
     return this._browserSpeak(text, rate);
   },
 

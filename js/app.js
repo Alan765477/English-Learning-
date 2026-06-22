@@ -84,13 +84,13 @@ const App = {
         setTimeout(() => tip.classList.add('hidden'), 3500);
         return;
       }
-      show('正在测试 Azure 神经语音…（v8）', true);
+      show('正在测试 Azure 神经语音…（v9）', true);
       try {
         await Azure.speak('Azure neural voice is ready.', 1);
-        show('✅ Azure 神经语音可用！以后朗读都会用自然音色。（v8）', true);
+        show('✅ Azure 神经语音可用！以后朗读都会用自然音色。（v9）', true);
         setTimeout(() => tip.classList.add('hidden'), 4000);
       } catch (e) {
-        show('❌ ' + (e.message || 'Azure 连接失败') + '。（暂时仍用浏览器语音）（v8）', false);
+        show('❌ ' + (e.message || 'Azure 连接失败') + '。（暂时仍用浏览器语音）（v9）', false);
       }
     };
 
