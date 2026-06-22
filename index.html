@@ -10,9 +10,9 @@
   <meta name="apple-mobile-web-app-title" content="英语听说" />
   <title>英语听说训练</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=16" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=17" />
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
-  <link rel="stylesheet" href="css/style.css?v=16" />
+  <link rel="stylesheet" href="css/style.css?v=17" />
 </head>
 <body>
   <div id="app">
@@ -105,28 +105,34 @@
       </div>
     </section>
 
-    <!-- AI 口语陪练 -->
+    <!-- AI 口语陪练（纯语音） -->
     <section class="view hidden" id="view-ai">
       <header class="view-header">
         <h1>AI 口语陪练</h1>
-        <p class="subtitle">和 AI 外教对话 · 智能纠错</p>
+        <p class="subtitle">纯语音对话 · 智能纠错</p>
       </header>
-      <div class="ai-chat" id="ai-chat">
-        <div class="ai-empty" id="ai-empty">
-          <canvas class="orb" id="ai-orb" aria-hidden="true"></canvas>
-          <p class="hero-title">AI 外教</p>
-          <p class="hero-sub">选个话题，开始用英语对话<br>AI 会陪你聊天并即时纠正语法和表达</p>
-          <div class="topic-chips">
-            <button class="chip topic" data-topic="Let's talk about my day. Ask me what I did today.">聊聊今天</button>
-            <button class="chip topic" data-topic="Let's role-play ordering food at a restaurant. You are the waiter.">餐厅点餐</button>
-            <button class="chip topic" data-topic="Let's practice a job interview. You are the interviewer.">模拟面试</button>
-            <button class="chip topic" data-topic="Let's chat about travel and my favorite places.">旅行话题</button>
-          </div>
+      <div class="ai-stage">
+        <canvas class="orb" id="ai-orb" aria-hidden="true"></canvas>
+        <p class="ai-state" id="ai-state">点麦克风，开口说英语</p>
+        <div class="ai-sub" id="ai-sub-user"></div>
+        <div class="ai-sub ai" id="ai-sub-ai"></div>
+        <div class="ai-sub corr" id="ai-sub-corr"></div>
+        <div class="topic-chips" id="ai-topics">
+          <button class="chip topic" data-topic="Let's talk about my day. Ask me what I did today.">聊聊今天</button>
+          <button class="chip topic" data-topic="Let's role-play ordering food at a restaurant. You are the waiter.">餐厅点餐</button>
+          <button class="chip topic" data-topic="Let's practice a job interview. You are the interviewer.">模拟面试</button>
+          <button class="chip topic" data-topic="Let's chat about travel and my favorite places.">旅行话题</button>
         </div>
       </div>
-      <div class="ai-input-row">
-        <button class="btn-mic" id="ai-mic" title="语音输入">🎤</button>
-        <input type="text" id="ai-text" placeholder="用英语说点什么…" />
+      <div class="ai-dock">
+        <button class="ai-mini" id="ai-kb" title="改用打字">⌨️</button>
+        <button class="ai-talk" id="ai-talk" title="说话">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/><path d="M8.5 21h7"/></svg>
+        </button>
+        <button class="ai-mini" id="ai-replay" title="重听上一句">🔊</button>
+      </div>
+      <div class="ai-text-row hidden" id="ai-text-row">
+        <input type="text" id="ai-text" placeholder="打字也可以，回车发送…" />
         <button class="btn-send" id="ai-send">发送</button>
       </div>
       <p class="ai-warn" id="ai-warn"></p>
@@ -303,18 +309,18 @@
     </nav>
   </div>
 
-  <script src="js/storage.js?v=16"></script>
-  <script src="js/lessons.js?v=16"></script>
-  <script src="js/azure.js?v=16"></script>
-  <script src="js/speech.js?v=16"></script>
-  <script src="js/listening.js?v=16"></script>
-  <script src="js/shadowing.js?v=16"></script>
-  <script src="js/dictation.js?v=16"></script>
-  <script src="js/ai.js?v=16"></script>
-  <script src="js/video.js?v=16"></script>
-  <script src="js/translate.js?v=16"></script>
-  <script src="js/vocab.js?v=16"></script>
-  <script src="js/orb.js?v=16"></script>
-  <script src="js/app.js?v=16"></script>
+  <script src="js/storage.js?v=17"></script>
+  <script src="js/lessons.js?v=17"></script>
+  <script src="js/azure.js?v=17"></script>
+  <script src="js/speech.js?v=17"></script>
+  <script src="js/listening.js?v=17"></script>
+  <script src="js/shadowing.js?v=17"></script>
+  <script src="js/dictation.js?v=17"></script>
+  <script src="js/ai.js?v=17"></script>
+  <script src="js/video.js?v=17"></script>
+  <script src="js/translate.js?v=17"></script>
+  <script src="js/vocab.js?v=17"></script>
+  <script src="js/orb.js?v=17"></script>
+  <script src="js/app.js?v=17"></script>
 </body>
 </html>

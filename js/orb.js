@@ -6,10 +6,10 @@ const Orb = {
     if (!canvas || canvas._orb) return;
     canvas._orb = true;
     const ctx = canvas.getContext('2d');
-    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
 
     // Evenly distribute points on a sphere (Fibonacci spiral).
-    const N = 440;
+    const N = 300;
     const pts = [];
     for (let i = 0; i < N; i++) {
       const y = 1 - (i / (N - 1)) * 2;

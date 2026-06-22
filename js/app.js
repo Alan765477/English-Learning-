@@ -11,12 +11,7 @@ const App = {
     this.registerSW();
     // Voice orb on the AI screen — pulses with the AI's real speaking level.
     if (window.Orb) {
-      Orb.mount(document.getElementById('ai-orb'), () => {
-        const lv = (window.Azure && Azure.levels) ? Azure.levels(6) : null;
-        if (!lv) return 0;
-        let s = 0; for (const v of lv) s += v;
-        return Math.min(1, (s / lv.length) * 1.9);
-      });
+      Orb.mount(document.getElementById('ai-orb'), () => (window.AI && AI.orbLevel) ? AI.orbLevel() : 0);
     }
   },
 
@@ -204,7 +199,7 @@ function toast(msg, ms = 5000) {
 
 // ---- Auto-update: silently reload when a newer build is deployed ----
 // Keep APP_BUILD in sync with the ?v=NN on the asset URLs in index.html.
-const APP_BUILD = 16;
+const APP_BUILD = 17;
 async function checkUpdate() {
   try {
     const html = await (await fetch('./index.html?_=' + Date.now(), { cache: 'no-store' })).text();

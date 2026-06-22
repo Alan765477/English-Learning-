@@ -139,10 +139,18 @@ const Azure = {
       const done = () => { if (settled) return; settled = true; URL.revokeObjectURL(url); resolve(); };
       a.onended = done;
       a.onerror = done;
-      a.play().then(() => {}).catch((e) => {
-        if (settled) return; settled = true; URL.revokeObjectURL(url);
+      // iOS can interrupt the audio session (e.g. after using the mic for
+      // recognition). Resume the context and retry once before giving up.
+      const tryPlay = (retry) => a.play().catch(async () => {
+        if (settled) return;
+        if (retry) {
+          try { if (this._ctx) await this._ctx.resume(); } catch {}
+          return tryPlay(false);
+        }
+        settled = true; URL.revokeObjectURL(url);
         reject(new Error('iPhone 拦截了播放（请确认已先点过屏幕、且未静音）'));
       });
+      tryPlay(true);
     });
   },
 
