@@ -10,9 +10,9 @@
   <meta name="apple-mobile-web-app-title" content="英语听说" />
   <title>英语听说训练</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=17" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=18" />
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
-  <link rel="stylesheet" href="css/style.css?v=17" />
+  <link rel="stylesheet" href="css/style.css?v=18" />
 </head>
 <body>
   <div id="app">
@@ -112,7 +112,12 @@
         <p class="subtitle">纯语音对话 · 智能纠错</p>
       </header>
       <div class="ai-stage">
-        <canvas class="orb" id="ai-orb" aria-hidden="true"></canvas>
+        <div class="orb" id="ai-orb" aria-hidden="true">
+          <div class="orb-scale">
+            <div class="orb-glow"></div>
+            <div class="orb-dots"></div>
+          </div>
+        </div>
         <p class="ai-state" id="ai-state">点麦克风，开口说英语</p>
         <div class="ai-sub" id="ai-sub-user"></div>
         <div class="ai-sub ai" id="ai-sub-ai"></div>
@@ -309,18 +314,18 @@
     </nav>
   </div>
 
-  <script src="js/storage.js?v=17"></script>
-  <script src="js/lessons.js?v=17"></script>
-  <script src="js/azure.js?v=17"></script>
-  <script src="js/speech.js?v=17"></script>
-  <script src="js/listening.js?v=17"></script>
-  <script src="js/shadowing.js?v=17"></script>
-  <script src="js/dictation.js?v=17"></script>
-  <script src="js/ai.js?v=17"></script>
-  <script src="js/video.js?v=17"></script>
-  <script src="js/translate.js?v=17"></script>
-  <script src="js/vocab.js?v=17"></script>
-  <script src="js/orb.js?v=17"></script>
-  <script src="js/app.js?v=17"></script>
+  <script src="js/storage.js?v=18"></script>
+  <script src="js/lessons.js?v=18"></script>
+  <script src="js/azure.js?v=18"></script>
+  <script src="js/speech.js?v=18"></script>
+  <script src="js/listening.js?v=18"></script>
+  <script src="js/shadowing.js?v=18"></script>
+  <script src="js/dictation.js?v=18"></script>
+  <script src="js/ai.js?v=18"></script>
+  <script src="js/video.js?v=18"></script>
+  <script src="js/translate.js?v=18"></script>
+  <script src="js/vocab.js?v=18"></script>
+  <script src="js/orb.js?v=18"></script>
+  <script src="js/app.js?v=18"></script>
 </body>
 </html>

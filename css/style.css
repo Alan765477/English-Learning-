@@ -203,7 +203,32 @@ html, body {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; gap: 10px; padding: 6px 4px;
 }
-.orb { width: 200px; height: 200px; }
+/* CSS voice orb: glowing gradient sphere + rotating dotted shell, pulses with --lvl */
+.orb { position: relative; width: 200px; height: 200px; display: grid; place-items: center; --lvl: 0; }
+.orb-scale {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  transform: scale(calc(1 + var(--lvl) * 0.26));
+  transition: transform .09s ease-out;
+}
+.orb-glow {
+  position: absolute; width: 66%; height: 66%; border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, #7db4ff 0%, #0a84ff 46%, #5e5ce6 100%);
+  box-shadow: 0 0 50px 8px rgba(10, 122, 255, .40), inset 0 0 30px rgba(255, 255, 255, .25);
+  animation: orbFloat 5.5s ease-in-out infinite;
+}
+.orb-dots {
+  position: absolute; width: 92%; height: 92%; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, .95) 1px, transparent 1.7px) 0 0 / 13px 13px;
+  -webkit-mask: radial-gradient(circle, #000 58%, transparent 71%);
+          mask: radial-gradient(circle, #000 58%, transparent 71%);
+  opacity: .45;
+  animation: orbSpin 20s linear infinite;
+}
+@keyframes orbFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes orbSpin { to { transform: rotate(360deg); } }
+@media (prefers-color-scheme: dark) {
+  .orb-glow { box-shadow: 0 0 60px 12px rgba(10, 122, 255, .55), inset 0 0 30px rgba(255, 255, 255, .2); }
+}
 .ai-state { font-size: 15px; color: var(--text-dim); font-weight: 500; min-height: 20px; }
 .ai-sub { max-width: 340px; line-height: 1.5; }
 .ai-sub#ai-sub-user { color: var(--text-dim); font-size: 14px; }

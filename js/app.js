@@ -199,7 +199,7 @@ function toast(msg, ms = 5000) {
 
 // ---- Auto-update: silently reload when a newer build is deployed ----
 // Keep APP_BUILD in sync with the ?v=NN on the asset URLs in index.html.
-const APP_BUILD = 17;
+const APP_BUILD = 18;
 async function checkUpdate() {
   try {
     const html = await (await fetch('./index.html?_=' + Date.now(), { cache: 'no-store' })).text();
