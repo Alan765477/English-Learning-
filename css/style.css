@@ -203,31 +203,42 @@ html, body {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; gap: 10px; padding: 6px 4px;
 }
-/* CSS voice orb: glowing gradient sphere + rotating dotted shell, pulses with --lvl */
-.orb { position: relative; width: 200px; height: 200px; display: grid; place-items: center; --lvl: 0; }
+/* CSS voice orb: a glowing 3D energy ball with a flowing sheen + soft halo.
+   Pulses with the --lvl variable (0..1) set by orb.js. */
+.orb { position: relative; width: 210px; height: 210px; display: grid; place-items: center; --lvl: 0; }
+.orb-halo {
+  position: absolute; width: 100%; height: 100%; border-radius: 50%;
+  background: radial-gradient(circle, rgba(10, 132, 255, .42), rgba(94, 92, 230, .16) 46%, transparent 70%);
+  filter: blur(8px);
+  transform: scale(calc(1 + var(--lvl) * 0.55));
+  transition: transform .12s ease-out;
+  animation: orbBreathe 5s ease-in-out infinite;
+}
 .orb-scale {
   position: absolute; inset: 0; display: grid; place-items: center;
-  transform: scale(calc(1 + var(--lvl) * 0.26));
+  transform: scale(calc(1 + var(--lvl) * 0.16));
   transition: transform .09s ease-out;
 }
-.orb-glow {
-  position: absolute; width: 66%; height: 66%; border-radius: 50%;
-  background: radial-gradient(circle at 36% 30%, #7db4ff 0%, #0a84ff 46%, #5e5ce6 100%);
-  box-shadow: 0 0 50px 8px rgba(10, 122, 255, .40), inset 0 0 30px rgba(255, 255, 255, .25);
+.orb-ball {
+  width: 62%; height: 62%; border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, #d4e6ff 0%, #66a6ff 24%, #1f6dff 56%, #5a4fe0 100%);
+  box-shadow:
+    0 12px 40px rgba(10, 122, 255, .50),
+    inset -8px -12px 26px rgba(40, 28, 120, .45),
+    inset 10px 10px 24px rgba(255, 255, 255, .40);
   animation: orbFloat 5.5s ease-in-out infinite;
 }
-.orb-dots {
-  position: absolute; width: 92%; height: 92%; border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, .95) 1px, transparent 1.7px) 0 0 / 13px 13px;
-  -webkit-mask: radial-gradient(circle, #000 58%, transparent 71%);
-          mask: radial-gradient(circle, #000 58%, transparent 71%);
-  opacity: .45;
-  animation: orbSpin 20s linear infinite;
+.orb-sheen {
+  position: absolute; width: 62%; height: 62%; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(255, 255, 255, .38) 60deg, transparent 150deg);
+  mix-blend-mode: screen; opacity: .7;
+  animation: orbSpin 7s linear infinite;
 }
-@keyframes orbFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes orbBreathe { 0%, 100% { opacity: .8; } 50% { opacity: 1; } }
+@keyframes orbFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
 @keyframes orbSpin { to { transform: rotate(360deg); } }
 @media (prefers-color-scheme: dark) {
-  .orb-glow { box-shadow: 0 0 60px 12px rgba(10, 122, 255, .55), inset 0 0 30px rgba(255, 255, 255, .2); }
+  .orb-halo { background: radial-gradient(circle, rgba(10, 132, 255, .55), rgba(94, 92, 230, .2) 46%, transparent 72%); }
 }
 .ai-state { font-size: 15px; color: var(--text-dim); font-weight: 500; min-height: 20px; }
 .ai-sub { max-width: 340px; line-height: 1.5; }
