@@ -115,6 +115,17 @@ html, body {
 .reveal-hint { color: var(--text-dim); font-size: 13px; margin-top: 18px; opacity: .8; }
 .hidden { display: none !important; }
 
+/* Playback waveform (stylized equalizer, shown only while speaking) */
+.wave { display: none; align-items: center; justify-content: center; gap: 5px; height: 60px; margin: 6px 0 2px; }
+.wave.active { display: flex; }
+.wave i {
+  display: block; width: 5px; height: 22px; border-radius: 3px;
+  background: linear-gradient(var(--primary), #5e5ce6);
+  transform: scaleY(.35);
+  animation: wavebar 0.9s ease-in-out infinite;
+}
+@keyframes wavebar { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+
 /* Controls */
 .controls { margin: 18px 2px; }
 .speed-control { display: block; font-size: 14px; color: var(--text-dim); margin-bottom: 18px; font-weight: 500; }

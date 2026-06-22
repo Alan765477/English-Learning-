@@ -72,7 +72,10 @@ const Listening = {
     });
   },
 
-  play() { Speech.speak(this.cur().en, Store.get('listenRate')); },
+  play() {
+    const p = Speech.speak(this.cur().en, Store.get('listenRate'));
+    if (window.Wave) Wave.run(document.getElementById('listen-wave'), p);
+  },
 
   move(d) {
     const n = LESSONS[this.lessonIdx].sentences.length;

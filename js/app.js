@@ -128,6 +128,31 @@ const App = {
   },
 };
 
+// Stylized playback equalizer. Bars animate while audio plays (driven by the
+// speak() promise resolving on end). Not tied to real amplitude on purpose —
+// real analysis would route audio through Web Audio and get silenced by the
+// iOS mute switch.
+const Wave = {
+  fill(el, n = 20) {
+    if (!el || el.dataset.filled) return;
+    let html = '';
+    for (let i = 0; i < n; i++) {
+      const dur = (0.6 + Math.random() * 0.7).toFixed(2);
+      const delay = (-Math.random() * 0.9).toFixed(2);
+      const h = (10 + Math.round(Math.random() * 20));
+      html += `<i style="height:${h}px;animation-duration:${dur}s;animation-delay:${delay}s"></i>`;
+    }
+    el.innerHTML = html;
+    el.dataset.filled = '1';
+  },
+  run(el, promise) {
+    if (el) { this.fill(el); el.classList.add('active'); }
+    Promise.resolve(promise).finally(() => { if (el) el.classList.remove('active'); });
+    return promise;
+  },
+};
+window.Wave = Wave;
+
 // Lightweight on-screen toast so playback/diagnostic messages are visible on
 // mobile (where there's no console to inspect).
 function toast(msg, ms = 5000) {
