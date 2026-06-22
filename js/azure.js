@@ -33,7 +33,7 @@ const Azure = {
   },
 
   async speak(text, rate = 1) {
-    const key = Store.get('azureKey');
+    const key = (Store.get('azureKey') || '').replace(/\s+/g, '');
     const region = Store.get('azureRegion');
     const voice = Store.get('azureVoice') || 'en-US-AvaMultilingualNeural';
     const pct = Math.round((rate - 1) * 100);
@@ -90,7 +90,9 @@ const Azure = {
   async assess(reference) {
     await this.loadSDK();
     const SDK = window.SpeechSDK;
-    const cfg = SDK.SpeechConfig.fromSubscription(Store.get('azureKey'), Store.get('azureRegion'));
+    const cfg = SDK.SpeechConfig.fromSubscription(
+      (Store.get('azureKey') || '').replace(/\s+/g, ''),
+      (Store.get('azureRegion') || '').trim().toLowerCase());
     cfg.speechRecognitionLanguage = 'en-US';
     const audio = SDK.AudioConfig.fromDefaultMicrophoneInput();
     const recognizer = new SDK.SpeechRecognizer(cfg, audio);

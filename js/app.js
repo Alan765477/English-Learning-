@@ -63,9 +63,11 @@ const App = {
     azRegion.value = Store.get('azureRegion');
     azVoice.value = Store.get('azureVoice');
     document.getElementById('set-azure-save').onclick = async () => {
+      // Strip ALL whitespace from the key (mobile copy/paste often sneaks in a
+      // trailing newline or space, which makes a valid key return 401).
       Store.setAll({
-        azureKey: azKey.value.trim(),
-        azureRegion: azRegion.value.trim(),
+        azureKey: azKey.value.replace(/\s+/g, ''),
+        azureRegion: azRegion.value.trim().toLowerCase(),
         azureVoice: azVoice.value,
       });
       const tip = document.getElementById('set-azure-saved');
