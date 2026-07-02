@@ -87,6 +87,7 @@ const Orb = {
     const acc = [...this.ACCENTS.idle];
     let spriteA = null, spriteB = null, spriteKey = '';
 
+    let fillA = '', fillB = '';
     function refreshSprites() {
       // On light backgrounds a pale glow reads as fog — darken the tint so
       // the dust stays saturated and legible.
@@ -96,6 +97,9 @@ const Orb = {
       spriteKey = key;
       spriteA = self._makeSprite([col[0] * f | 0, col[1] * f | 0, col[2] * f | 0]);
       spriteB = self._makeSprite([acc[0] * f | 0, acc[1] * f | 0, acc[2] * f | 0]);
+      // Solid fills for the crisp dot cores.
+      fillA = 'rgb(' + (col[0] * f | 0) + ',' + (col[1] * f | 0) + ',' + (col[2] * f | 0) + ')';
+      fillB = 'rgb(' + (acc[0] * f | 0) + ',' + (acc[1] * f | 0) + ',' + (acc[2] * f | 0) + ')';
     }
 
     function frame() {
@@ -151,11 +155,20 @@ const Orb = {
         const py = cy + x * sp_ + y * cp
                  + Math.sin(t * 0.8 + p.ph * 2) * R * 0.05 * (1 + p.lift);
         const tw = 0.68 + 0.32 * Math.sin(t * (1.3 + p.wf) + p.ph * 3);
-        const alpha = (0.12 + (1 - p.r) * 0.36) * (0.7 + level * 0.55) * tw
-                    * (isDark ? 1 : 1);
-        const d = R * (0.045 + 0.12 * p.sz * (1.15 - p.r * 0.6)) * (1 + level * 0.15);
+        const alpha = (0.3 + (1 - p.r) * 0.45) * (0.7 + level * 0.55) * tw;
+        // Crisp solid dot; the glow lives in a separate soft layer beneath it
+        // (dark mode only) so the point itself always reads sharp.
+        const dotR = R * (0.008 + 0.014 * p.sz * (1.15 - p.r * 0.6)) * (1 + level * 0.15);
+        if (isDark) {
+          const gd = dotR * 9;
+          ctx.globalAlpha = Math.min(1, alpha * 0.4);
+          ctx.drawImage(p.mix < 0.62 ? spriteA : spriteB, px - gd / 2, py - gd / 2, gd, gd);
+        }
         ctx.globalAlpha = Math.min(1, alpha);
-        ctx.drawImage(p.mix < 0.62 ? spriteA : spriteB, px - d / 2, py - d / 2, d, d);
+        ctx.fillStyle = p.mix < 0.62 ? fillA : fillB;
+        ctx.beginPath();
+        ctx.arc(px, py, dotR, 0, 6.2832);
+        ctx.fill();
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
