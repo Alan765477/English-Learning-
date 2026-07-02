@@ -112,6 +112,10 @@ const Speech = {
   },
 };
 
+// Top-level `const` in classic scripts does not become a window property;
+// attach explicitly so cross-module `window.Speech` checks work.
+window.Speech = Speech;
+
 // Compare spoken transcript against the target sentence -> 0..100 score.
 function scorePronunciation(target, heard) {
   const norm = (s) => s.toLowerCase().replace(/[^a-z0-9'\s]/g, '').split(/\s+/).filter(Boolean);
