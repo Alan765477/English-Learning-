@@ -23,14 +23,17 @@ const Orb = {
   SPEED:  { idle: 1, listening: 1.6, thinking: 3.0, speaking: 1.7 },
   SPREAD: { idle: 1, listening: 1.06, thinking: 0.7, speaking: 1.02 },
 
-  // Soft radial glow sprite, tinted to a color (regenerated as states blend).
+  // Glow sprite, tinted to a color (regenerated as states blend). A tight
+  // bright core with a short falloff — soft enough to glow in dark mode but
+  // crisp enough not to smear into fog on light backgrounds.
   _makeSprite(rgb) {
     const s = document.createElement('canvas');
     s.width = s.height = 64;
     const g = s.getContext('2d');
     const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
     grad.addColorStop(0, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},1)`);
-    grad.addColorStop(0.3, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.55)`);
+    grad.addColorStop(0.28, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.85)`);
+    grad.addColorStop(0.55, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},.25)`);
     grad.addColorStop(1, `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0)`);
     g.fillStyle = grad;
     g.fillRect(0, 0, 64, 64);
@@ -65,7 +68,7 @@ const Orb = {
 
     let W = 0, H = 0, cx = 0, cy = 0, R = 0, DPR = 1;
     function resize() {
-      DPR = Math.min(window.devicePixelRatio || 1, 2);
+      DPR = Math.min(window.devicePixelRatio || 1, 3);
       const rect = canvas.getBoundingClientRect();
       const w = Math.round(rect.width), h = Math.round(rect.height);
       if (!w || !h) return;
@@ -85,11 +88,14 @@ const Orb = {
     let spriteA = null, spriteB = null, spriteKey = '';
 
     function refreshSprites() {
-      const key = (col[0] | 0) + ',' + (col[1] | 0) + ',' + (acc[0] | 0);
+      // On light backgrounds a pale glow reads as fog — darken the tint so
+      // the dust stays saturated and legible.
+      const f = (dark ? dark.matches : true) ? 1 : 0.62;
+      const key = (col[0] | 0) + ',' + (col[1] | 0) + ',' + (acc[0] | 0) + ',' + f;
       if (key === spriteKey) return;
       spriteKey = key;
-      spriteA = self._makeSprite([col[0] | 0, col[1] | 0, col[2] | 0]);
-      spriteB = self._makeSprite([acc[0] | 0, acc[1] | 0, acc[2] | 0]);
+      spriteA = self._makeSprite([col[0] * f | 0, col[1] * f | 0, col[2] * f | 0]);
+      spriteB = self._makeSprite([acc[0] * f | 0, acc[1] * f | 0, acc[2] * f | 0]);
     }
 
     function frame() {
@@ -123,7 +129,7 @@ const Orb = {
       // Core glow.
       const coreR = R * (0.5 + level * 0.22) * breath;
       const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-      const coreA = (isDark ? 0.4 : 0.26) * (0.8 + level * 0.5);
+      const coreA = (isDark ? 0.4 : 0.16) * (0.8 + level * 0.5);
       cg.addColorStop(0, `rgba(${col[0] | 0},${col[1] | 0},${col[2] | 0},${coreA.toFixed(2)})`);
       cg.addColorStop(1, `rgba(${col[0] | 0},${col[1] | 0},${col[2] | 0},0)`);
       ctx.globalCompositeOperation = 'source-over';
@@ -146,8 +152,8 @@ const Orb = {
                  + Math.sin(t * 0.8 + p.ph * 2) * R * 0.05 * (1 + p.lift);
         const tw = 0.68 + 0.32 * Math.sin(t * (1.3 + p.wf) + p.ph * 3);
         const alpha = (0.12 + (1 - p.r) * 0.36) * (0.7 + level * 0.55) * tw
-                    * (isDark ? 1 : 0.72);
-        const d = R * (0.06 + 0.19 * p.sz * (1.15 - p.r * 0.6)) * (1 + level * 0.15);
+                    * (isDark ? 1 : 1);
+        const d = R * (0.045 + 0.12 * p.sz * (1.15 - p.r * 0.6)) * (1 + level * 0.15);
         ctx.globalAlpha = Math.min(1, alpha);
         ctx.drawImage(p.mix < 0.62 ? spriteA : spriteB, px - d / 2, py - d / 2, d, d);
       }
