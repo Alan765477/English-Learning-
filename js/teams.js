@@ -16,6 +16,7 @@
 const TeamsInterp = {
   active: false,
   source: 'system',   // 'system' | 'mic'
+  dir: 'auto',        // 'auto' (Azure continuous language ID) | 'en2zh' | 'zh2en'
   rec: null,          // Azure TranslationRecognizer OR browser SpeechRecognition
   engine: null,       // 'azure' | 'webspeech'
   stream: null,       // display-capture stream (system mode)
@@ -30,6 +31,19 @@ const TeamsInterp = {
         try { microsoftTeams.app.notifyAppLoaded(); microsoftTeams.app.notifySuccess(); } catch {}
       }).catch(() => {});
     }
+
+    this.dir = Store.get('teamsDir') || 'auto';
+    document.querySelectorAll('#ti-dir .chip').forEach(btn => {
+      if (btn.dataset.dir === this.dir) btn.classList.add('on');
+      btn.onclick = () => {
+        if (this.active) this.stop();
+        this.dir = btn.dataset.dir;
+        Store.setAll({ teamsDir: this.dir });
+        document.querySelectorAll('#ti-dir .chip').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        this.hint();
+      };
+    });
 
     document.querySelectorAll('#ti-source .chip').forEach(btn => {
       btn.onclick = () => {
@@ -92,6 +106,9 @@ const TeamsInterp = {
           ? '麦克风模式（浏览器识别）：外放开会或现场会议时使用'
           : '先点右上 ⚙️ 填写 Azure Key（推荐）或 AI Key';
     }
+    if (this.dir === 'auto' && !this.azureConfigured()) {
+      msg = '「双向自动」需要 Azure Key；没有的话请手动选「英→中」或「中→英」。' + msg;
+    }
     this.status(msg);
   },
 
@@ -136,33 +153,65 @@ const TeamsInterp = {
     this.status(this.source === 'system' ? '正在听会议声音…' : '正在听麦克风…');
   },
 
-  // Azure streaming speech translation: en → zh-Hans in one call, partial
-  // results included — the same engine behind Teams' own live captions.
+  // Azure streaming speech translation with partial results — the same
+  // engine behind Teams' own live captions. Direction:
+  //   'en2zh' / 'zh2en'  — fixed recognition language, one target.
+  //   'auto'             — continuous language ID over en-US + zh-CN (needs
+  //                        the v2 universal endpoint), both targets requested;
+  //                        we pick which translation to show per sentence.
   async startAzure(stream) {
     await Azure.loadSDK();
     const SDK = window.SpeechSDK;
-    const cfg = SDK.SpeechTranslationConfig.fromSubscription(
-      (Store.get('azureKey') || '').replace(/\s+/g, ''),
-      (Store.get('azureRegion') || '').trim().toLowerCase());
-    cfg.speechRecognitionLanguage = 'en-US';
-    cfg.addTargetLanguage('zh-Hans');
+    const key = (Store.get('azureKey') || '').replace(/\s+/g, '');
+    const region = (Store.get('azureRegion') || '').trim().toLowerCase();
+    let cfg;
+    if (this.dir === 'auto') {
+      cfg = SDK.SpeechTranslationConfig.fromEndpoint(
+        new URL('wss://' + region + '.stt.speech.microsoft.com/speech/universal/v2'), key);
+      try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_LanguageIdMode, 'Continuous'); } catch {}
+      cfg.addTargetLanguage('zh-Hans');
+      cfg.addTargetLanguage('en');
+    } else {
+      cfg = SDK.SpeechTranslationConfig.fromSubscription(key, region);
+      if (this.dir === 'zh2en') {
+        cfg.speechRecognitionLanguage = 'zh-CN';
+        cfg.addTargetLanguage('en');
+      } else {
+        cfg.speechRecognitionLanguage = 'en-US';
+        cfg.addTargetLanguage('zh-Hans');
+      }
+    }
     // Finalize a sentence ~0.6s after the speaker pauses (default ~2s lags).
     try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '600'); } catch {}
     const audio = stream
       ? SDK.AudioConfig.fromStreamInput(stream)
       : SDK.AudioConfig.fromDefaultMicrophoneInput();
-    const rec = new SDK.TranslationRecognizer(cfg, audio);
+    let rec;
+    if (this.dir === 'auto') {
+      const autoLang = SDK.AutoDetectSourceLanguageConfig.fromLanguages(['en-US', 'zh-CN']);
+      rec = SDK.TranslationRecognizer.FromConfig(cfg, autoLang, audio);
+    } else {
+      rec = new SDK.TranslationRecognizer(cfg, audio);
+    }
     this.engine = 'azure';
     this.rec = rec;
-    const zhOf = (r) => { try { return r.translations.get('zh-Hans') || ''; } catch { return ''; } };
+    // Which translation to show: a Chinese sentence gets its English
+    // translation and vice versa. CJK presence in the recognized text tells
+    // the source language apart more reliably than SDK metadata.
+    const transOf = (r) => {
+      try {
+        const target = /[一-鿿]/.test(r.text || '') ? 'en' : 'zh-Hans';
+        return r.translations.get(target) || '';
+      } catch { return ''; }
+    };
     rec.recognizing = (s, e) => {
-      if (e.result && e.result.text) this.interim(e.result.text, zhOf(e.result));
+      if (e.result && e.result.text) this.interim(e.result.text, transOf(e.result));
     };
     rec.recognized = (s, e) => {
       const r = e.result;
       if (r && r.reason === SDK.ResultReason.TranslatedSpeech && r.text.trim()) {
         this.interim('', '');
-        this.addLine(r.text.trim(), zhOf(r).trim());
+        this.addLine(r.text.trim(), transOf(r).trim());
       }
     };
     rec.canceled = (s, e) => {
@@ -181,7 +230,9 @@ const TeamsInterp = {
   startWebSpeech() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
-    rec.lang = 'en-US';
+    // Browser recognition can't auto-detect language, so 'auto' listens for
+    // English here; the AI prompt still translates either direction.
+    rec.lang = this.dir === 'zh2en' ? 'zh-CN' : 'en-US';
     rec.continuous = false;
     rec.interimResults = true;
     rec.onresult = (e) => {
@@ -272,7 +323,7 @@ const TeamsInterp = {
     list.appendChild(row);
     this.trimAndScroll(list);
     try {
-      const zh = await AI.translate(en);
+      const zh = await AI.translateAuto(en);
       row.querySelector('.ti-zh').textContent = zh;
     } catch {
       row.querySelector('.ti-zh').textContent = '（翻译失败，检查 Key/网络）';

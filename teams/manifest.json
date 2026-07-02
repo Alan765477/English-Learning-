@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
   "manifestVersion": "1.16",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "id": "ae69cff7-9f5a-4a0f-bc4d-fbe4019007d3",
   "packageName": "com.alan.englishlearning.livetranslator",
   "developer": {
@@ -15,8 +15,8 @@
     "full": "会议实时翻译 · Live Meeting Translator"
   },
   "description": {
-    "short": "开会时把英语发言实时翻译成中文字幕",
-    "full": "在 Teams 会议侧边栏显示实时中文字幕：捕获会议声音或麦克风，把英语发言边说边翻译成中文。API Key 只保存在本机浏览器，纯前端实现，无服务器。"
+    "short": "开会时英↔中双向实时翻译字幕",
+    "full": "在 Teams 会议侧边栏显示实时翻译字幕：捕获会议声音或麦克风，英语发言译成中文、中文发言译成英文，支持双向自动识别，边说边出字幕。API Key 只保存在本机浏览器，纯前端实现，无服务器。"
   },
   "icons": {
     "color": "color.png",

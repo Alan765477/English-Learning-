@@ -1,6 +1,6 @@
 # Teams 会议实时翻译插件
 
-开会时别人讲英语，侧边栏实时显示中文字幕。这是一个标准的 **Microsoft Teams 会议侧边栏应用**（meeting side panel app），也可以不装进 Teams、直接当网页用。
+开会时侧边栏实时显示翻译字幕，**英↔中双向**：别人讲英语出中文字幕，讲中文出英文字幕，支持自动识别语言方向。这是一个标准的 **Microsoft Teams 会议侧边栏应用**（meeting side panel app），也可以不装进 Teams、直接当网页用。
 
 ![原理](#工作原理) 纯前端、无服务器：页面部署在 GitHub Pages 上，语音翻译直接从浏览器调用 Azure Speech（微软 Teams 官方字幕用的同一个引擎），Key 只存在本机。
 

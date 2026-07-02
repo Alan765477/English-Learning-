@@ -442,6 +442,13 @@ Rules:
       text, 200);
   },
 
+  // Direction-agnostic one-shot translation (used by the meeting translator).
+  translateAuto(text) {
+    return this._oneShot(
+      'You are a translation engine. If the input is mainly English, translate it to natural, concise Simplified Chinese. If the input is mainly Chinese, translate it to natural, concise English. Output ONLY the translation, nothing else.',
+      text, 200);
+  },
+
   // Batch-annotate sentences for the lesson importer:
   // returns [{zh, ipa}] in the same order as the input.
   async annotate(sentences) {
