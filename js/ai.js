@@ -9,6 +9,7 @@
 // plays, so there is no gap between sentences.
 const AI = {
   history: [],
+  recaps: [],          // {user, corr} — session correction log for review
   busy: false,
   state: 'idle',      // 'idle' | 'listening' | 'thinking' | 'speaking'
   lastSpoken: '',
@@ -42,6 +43,18 @@ Rules:
       btn.onclick = () => this.send(btn.dataset.topic);
     });
     document.getElementById('ai-setup').onclick = () => { if (window.Sheet) Sheet.open('sheet-ai'); };
+    // Correction recap (今日纠错).
+    document.getElementById('ai-recap').onclick = () => {
+      const el = document.getElementById('recap-list');
+      el.innerHTML = this.recaps.length
+        ? this.recaps.map(r => `
+          <div class="recap-item">
+            <div class="recap-user">🗣 ${r.user}</div>
+            <div class="recap-corr">📝 ${r.corr}</div>
+          </div>`).join('')
+        : '<p class="recap-empty">本次对话还没有纠错记录</p>';
+      if (window.Sheet) Sheet.open('sheet-recap');
+    };
     // Hands-free toggle.
     const auto = document.getElementById('ai-auto');
     auto.classList.toggle('on', this.autoTalk());
@@ -250,7 +263,15 @@ Rules:
       document.getElementById('ai-sub-ai').textContent = spoken;
       if (this._emitted === 0) this.enqueueSpeak(spoken, gen);
     }
-    if (correction) document.getElementById('ai-sub-corr').textContent = '📝 ' + correction;
+    if (correction) {
+      document.getElementById('ai-sub-corr').textContent = '📝 ' + correction;
+      // Keep a session log so the learner can review all corrections later.
+      const lastUser = [...this.history].reverse().find(m => m.role === 'user');
+      this.recaps.push({ user: lastUser ? lastUser.text : '', corr: correction });
+      const chip = document.getElementById('ai-recap');
+      chip.textContent = '纠错 ' + this.recaps.length;
+      chip.classList.remove('hidden');
+    }
     this.lastSpoken = spoken;
     // When the last queued sentence finishes, come back to rest — then, in
     // hands-free mode, reopen the mic automatically.

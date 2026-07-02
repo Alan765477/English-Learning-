@@ -22,8 +22,77 @@ const Practice = {
 
   RATES: [0.75, 1, 1.25],
 
-  // Built-in lessons + user-imported custom lessons.
-  lessons() { return LESSONS.concat(window.Importer ? Importer.list() : []); },
+  // ---- Small local stores: per-lesson position, weak (low-score) sentences ----
+  _pos() { try { return JSON.parse(localStorage.getItem('els_pos') || '{}'); } catch { return {}; } },
+  _savePos() {
+    try {
+      const p = this._pos();
+      p[this.lesson().id] = this.i;
+      p.__last = this.lesson().id;
+      localStorage.setItem('els_pos', JSON.stringify(p));
+    } catch {}
+  },
+  weakList() { try { return JSON.parse(localStorage.getItem('els_weak') || '[]'); } catch { return []; } },
+  _saveWeak(l) { try { localStorage.setItem('els_weak', JSON.stringify(l)); } catch {} },
+
+  // Low-score sentences feed a virtual 复习 lesson; scoring ≥80 clears them.
+  trackScore(score) {
+    const les = this.lesson(), s = this.cur();
+    const k = les.id === '__weak' ? s.k : les.id + ':' + this.i;
+    if (!k) return;
+    let weak = this.weakList().filter(x => x.k !== k);
+    if (score < 70 && les.id !== '__numbers') {
+      weak.unshift({ k, en: s.en, ipa: s.ipa || '', zh: s.zh || '', score });
+      this.status(this.statusText() + '　已加入「需加强」复练列表');
+    }
+    this._saveWeak(weak.slice(0, 50));
+    this.buildLessonSheet();
+  },
+  statusText() { return document.getElementById('practice-status').textContent; },
+
+  // ---- Number dictation generator (随机数字/电话/金额/确认码) ----
+  genNumbers() {
+    const D = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+    const NATO = { A: 'Apple', B: 'Boy', C: 'Cat', D: 'Dog', E: 'Elephant', F: 'Frank', G: 'George', H: 'Henry', J: 'John', K: 'King', L: 'Lion', M: 'Mary', N: 'Nancy', P: 'Peter', R: 'Robert', S: 'Sam', T: 'Tom', V: 'Victor', W: 'William', X: 'X-ray', Y: 'Yellow', Z: 'Zebra' };
+    const ri = (n) => Math.floor(Math.random() * n);
+    const digits = (n, oh) => Array.from({ length: n }, () => { const d = ri(10); return (oh && d === 0) ? 'oh' : D[d]; });
+    const digitsRaw = (words) => words.map(w => w === 'oh' ? '0' : D.indexOf(w)).join('');
+    const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+    const TEENS = ['ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
+    const two = (n) => n < 10 ? D[n] : n < 20 ? TEENS[n - 10] : TENS[(n / 10) | 0] + (n % 10 ? '-' + D[n % 10] : '');
+    const out = [];
+    for (let r = 0; r < 4; r++) {
+      { // phone number, 3-3-4
+        const a = digits(3), b = digits(3), c = digits(4, true);
+        out.push({ en: `My phone number is ${a.join(' ')}, ${b.join(' ')}, ${c.join(' ')}.`,
+          alt: `${digitsRaw(a)}-${digitsRaw(b)}-${digitsRaw(c)}`, ipa: '', zh: '听写这个电话号码（格式 xxx-xxx-xxxx）' });
+      }
+      { // price
+        const d = 5 + ri(90), c = ri(100);
+        out.push({ en: `That'll be ${two(d)} ${c ? two(c) : ''}${c ? '' : 'dollars'}, please.`.replace('  ', ' '),
+          alt: '$' + d + '.' + String(c).padStart(2, '0'), ipa: '', zh: '听写这个金额（格式 $xx.xx）' });
+      }
+      { // confirmation code: L d d L d
+        const Ls = Object.keys(NATO);
+        const l1 = Ls[ri(Ls.length)], l2 = Ls[ri(Ls.length)];
+        const d1 = ri(10), d2 = ri(10), d3 = ri(10);
+        out.push({ en: `Your confirmation number is ${l1} as in ${NATO[l1]}, ${D[d1]}, ${D[d2]}, ${l2} as in ${NATO[l2]}, ${D[d3]}.`,
+          alt: `${l1}${d1}${d2}${l2}${d3}`, ipa: '', zh: '听写这个确认码（字母+数字）' });
+      }
+    }
+    return out;
+  },
+
+  // Built-in lessons + user-imported custom lessons + virtual lessons
+  // (需加强复练、数字听写生成器).
+  lessons() {
+    const base = LESSONS.concat(window.Importer ? Importer.list() : []);
+    if (!this._numCache) this._numCache = this.genNumbers();
+    base.push({ id: '__numbers', title: '生成 · 数字听写训练', level: '随机生成', gen: true, sentences: this._numCache });
+    const weak = this.weakList();
+    if (weak.length) base.push({ id: '__weak', title: '需加强 · 低分句复练', level: '复习', sentences: weak });
+    return base;
+  },
   lesson() {
     const all = this.lessons();
     if (this.lessonIdx >= all.length) this.lessonIdx = 0;
@@ -96,6 +165,14 @@ const Practice = {
       });
     }
 
+    // Resume where you left off: last lesson + last sentence.
+    const pos = this._pos();
+    if (pos.__last) {
+      const idx = this.lessons().findIndex(l => l.id === pos.__last);
+      if (idx >= 0) this.lessonIdx = idx;
+    }
+    this.i = Math.min(pos[this.lesson().id] || 0, this.lesson().sentences.length - 1);
+    this.buildLessonSheet();
     this.render();
   },
 
@@ -179,8 +256,26 @@ const Practice = {
   },
   bindWords(el) {
     el.querySelectorAll('.word').forEach(w => {
-      w.onclick = () => Speech.speak(w.textContent.replace(/[^A-Za-z'-]/g, ''), 0.9);
+      w.onclick = () => {
+        const word = w.textContent.replace(/[^A-Za-z'-]/g, '');
+        if (!word) return;
+        Speech.speak(word, 0.9);
+        this.offerAddWord(word);
+      };
     });
+  },
+
+  // Tapping a word speaks it and offers a one-tap add to the vocab book.
+  offerAddWord(word) {
+    const s = document.getElementById('practice-status');
+    s.innerHTML = `<button class="add-word" id="add-word">＋ 把 “${word}” 加入生词本</button>`;
+    document.getElementById('add-word').onclick = () => {
+      if (window.Vocab) Vocab.addWithGloss(word);
+      s.textContent = `✓ 已加入生词本：${word}`;
+      setTimeout(() => { if (s.textContent.includes(word)) s.textContent = ''; }, 2200);
+    };
+    clearTimeout(this._wordT);
+    this._wordT = setTimeout(() => { if (document.getElementById('add-word')) s.textContent = ''; }, 6000);
   },
 
   status(msg) { document.getElementById('practice-status').textContent = msg || ''; },
@@ -201,6 +296,7 @@ const Practice = {
     this.i = (this.i + d + n) % n;
     this.lastUrl = null;
     if (window.haptic) haptic(6);
+    this._savePos();
     this.render();
     this.play();
   },
@@ -340,6 +436,7 @@ const Practice = {
   showScore(heard) {
     const { score, words } = scorePronunciation(this.cur().en, heard);
     this.status('你说的：' + heard);
+    this.trackScore(score);
     const box = document.getElementById('practice-score');
     box.classList.remove('hidden');
     const num = document.getElementById('practice-score-num');
@@ -351,6 +448,7 @@ const Practice = {
 
   showAzureScore(r) {
     this.status('');
+    this.trackScore(r.pron);
     const box = document.getElementById('practice-score');
     box.classList.remove('hidden');
     const num = document.getElementById('practice-score-num');
@@ -371,9 +469,17 @@ const Practice = {
 
   // ---- Dictation ----
   checkDictation() {
-    const target = this.cur().en;
+    const s = this.cur();
     const typed = document.getElementById('dict-input').value;
-    document.getElementById('practice-dict-result').innerHTML = this.diff(target, typed);
+    const res = document.getElementById('practice-dict-result');
+    if (s.alt) {
+      // Number/code drills: compare the digits, not the words.
+      const norm = (x) => x.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const ok = norm(typed) === norm(s.alt);
+      res.innerHTML = `<div class="dict-summary">${ok ? '✅ 全对！' : '还差一点，再听一遍'}</div>答案：<b>${s.alt}</b>`;
+      return;
+    }
+    res.innerHTML = this.diff(s.en, typed);
   },
 
   diff(target, typed) {
@@ -414,24 +520,26 @@ const Practice = {
           this.deleteCustom(del.dataset.id);
           return;
         }
-        this.lessonIdx = +row.dataset.idx;
-        this.i = 0;
-        this.lastUrl = null;
-        this.buildLessonSheet();
-        this.render();
+        this.openLesson(+row.dataset.idx);
         if (window.Sheet) Sheet.close();
       };
     });
   },
 
-  selectLesson(id) {
-    const idx = this.lessons().findIndex(l => l.id === id);
-    if (idx < 0) return;
+  openLesson(idx) {
     this.lessonIdx = idx;
-    this.i = 0;
+    const les = this.lesson();
+    if (les.gen) { this._numCache = this.genNumbers(); les.sentences = this._numCache; } // fresh drill each visit
+    this.i = les.gen ? 0 : Math.min(this._pos()[les.id] || 0, les.sentences.length - 1);
     this.lastUrl = null;
+    this._savePos();
     this.buildLessonSheet();
     this.render();
+  },
+
+  selectLesson(id) {
+    const idx = this.lessons().findIndex(l => l.id === id);
+    if (idx >= 0) this.openLesson(idx);
   },
 
   deleteCustom(id) {

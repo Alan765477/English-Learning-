@@ -161,15 +161,11 @@ const App = {
   },
 
   registerSW() {
-    // The service-worker offline cache kept pinning old builds on iOS, causing
-    // endless "still the old version" problems. We now actively REMOVE it and
-    // wipe its caches so the app always loads the latest code from the network.
+    // Network-first worker: fresh content whenever online (so no iOS
+    // stale-build traps like the old cache-first worker), offline falls back
+    // to the last fetched copy — built-in lessons work with no connection.
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations()
-        .then(regs => regs.forEach(r => r.unregister())).catch(() => {});
-    }
-    if (window.caches && caches.keys) {
-      caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
   },
 };
@@ -212,7 +208,7 @@ function toast(msg, ms = 5000) {
 
 // ---- Auto-update: silently reload when a newer build is deployed ----
 // Keep APP_BUILD in sync with the ?v=NN on the asset URLs in index.html.
-const APP_BUILD = 30;
+const APP_BUILD = 31;
 async function checkUpdate() {
   try {
     const html = await (await fetch('./index.html?_=' + Date.now(), { cache: 'no-store' })).text();
