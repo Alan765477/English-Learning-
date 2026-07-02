@@ -7,123 +7,192 @@
 <title>会议实时翻译 · Live Translator</title>
 <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAYAAABS3GwHAAAEMklEQVR42u3dvUpcXRiG4Tm6NClSpLEUS9tUKa0srCwsYpGjsLCJEE9BbLUKIkERRkGEcYcnTWRjiI6ZYc16rxfuE9hrXWb/rPm+yYd3PwapahMXQQBIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEjdAtjcuBz2926G46O74fzsYZhOZ8Ns9jiYxU6uca51rnmufdYgawHAktrduR5OT+7txMYma5K1AWBBbW9d/f6rY9qerFHWCoD/2OHBrZ21YpM1A+CNra9duN1Z8duirCEAc25+tzx93BK1jKBZAP7y9/UvAQDu+T0TAPCytz2mz2nx7VBzANz39/08AMA/PnKZvqe1j2UTD76m8gPxpKWzPabGtHR2qBkAOVRlakzWGoBROVloakzWGgBvf7wNAuBPOWNuakzWGoBRfsxSZ7LWAIwytQYAAAAAAAAAAFgKgO/f7obPn34OH9/7LyH8rVybXKNcKwA6AvD1y40N/spyzQDoAED+mtnQ87XIfwkAWBKA/JNuM89Xrh0AKw7APf/bngkAAAAAANwCuQUCwEOwh2AAvAb1GhQAH8J8CAPAUQgDAAAGAAAMAAAYAAAwAABgAADAAACAAcCHMB/CAHAUwlEIAByGcxgOAMehHYcGwA9i/CAGAAAAAMAtkFsgADwEewgGwGtQr0EB8CHMhzAAjKMQABgAADAAAGAAAMAAAIABAAADAAAGAABeMxU+hC3zQxYAjkKUPsoAgMNwpQ+zAeA4dOnjzAD4QUzpH7QAAAAAALgFcgsEgIdgD8EAeA3qNSgAPoT5EAaAoxAGAAAMAAAYAF7YbPZoVxSZrDUAo6bTmZ1RZLLWAIw6P3uwM4pM1hqAUcdHd3ZGkclaAzBqf+/GzigyWWsARm1uXNoZRSZrDcAznZ7c2x2dT9a4pT3XFIDdnWs7pPPJGgPgbZC3PwA83/bWlZ3S6WRtAXhBhwe3dktnkzVtca81CcADsQff8gDW1y48D3Ry35+1BGBOBP4lWO2//C1v/uYBeCZwzw/Ak7dDbolW45anxbc9Kw/g6ccyt0Vt3u609pGrSwBPzw7lUFVOFuavTs6Y+1HN4ifXONc61zzXPmvQ0tmeMgBa/gmm/+cwAGUB2FQAlAVgQwFQFoDNBEBZADYSAGUB2EQAlAVgAwFQFoDNA0BZADYOAGUB2DQAlAVgwwBQFoDNAkBZADYKAGUB2CQAlAVggwBQFoDNAUBZADYGAGUB2BQAlAVgQwAgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIAEgASABIL2yX8Y1qOQvoEcXAAAAAElFTkSuQmCC">
 <style>
-  /* Self-contained dark caption theme — the Teams meeting side panel is dark,
-     and captions read best light-on-dark regardless of host theme. */
+  /* Apple-inspired dark theme: near-black surfaces, hairline separators,
+     iOS segmented controls, frosted top/bottom bars, one accent color. */
+  :root {
+    --bg: #000;
+    --surface: #1c1c1e;
+    --surface2: #2c2c2e;
+    --hairline: rgba(84, 84, 88, .5);
+    --text: #f5f5f7;
+    --text2: #98989f;
+    --text3: #636366;
+    --accent: #0a84ff;
+    --red: #ff453a;
+    --green: #30d158;
+    --seg-bg: rgba(118, 118, 128, .24);
+    --seg-on: #48484c;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    background: #1a1a20; color: #f0f0f4;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text);
     display: flex; flex-direction: column;
     overflow: hidden;
+    font-size: 15px;
   }
   .hidden { display: none !important; }
+  button { font-family: inherit; }
 
+  /* ---- Top bar ---- */
   header {
-    display: flex; align-items: center; gap: 8px;
-    padding: 10px 12px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 2px;
+    padding: 12px 14px 8px;
+    background: rgba(0,0,0,.72);
+    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    flex-shrink: 0; z-index: 2;
   }
-  header h1 { font-size: 15px; font-weight: 600; flex: 1; }
+  header h1 { font-size: 17px; font-weight: 600; letter-spacing: -.2px; flex: 1; }
   .icon-btn {
-    background: none; border: none; color: #aaa; font-size: 17px;
-    cursor: pointer; padding: 4px 6px; border-radius: 8px;
+    background: none; border: none; color: var(--accent); font-size: 16px;
+    cursor: pointer; padding: 6px 8px; border-radius: 8px; line-height: 1;
   }
-  .icon-btn:hover { background: rgba(255,255,255,.08); color: #fff; }
+  .icon-btn:active { opacity: .55; }
 
-  .chips { display: flex; gap: 6px; padding: 0 12px 8px; flex-shrink: 0; flex-wrap: wrap; }
+  /* ---- Controls ---- */
+  .controls { padding: 2px 14px 10px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+  .seg {
+    display: flex; background: var(--seg-bg); border-radius: 9px; padding: 2px;
+  }
+  .seg button {
+    flex: 1; border: none; background: none; color: var(--text);
+    font-size: 13px; padding: 6px 4px; border-radius: 7px; cursor: pointer;
+    white-space: nowrap; transition: background .15s;
+  }
+  .seg button.on { background: var(--seg-on); box-shadow: 0 1px 3px rgba(0,0,0,.4); font-weight: 600; }
+  .chips { display: flex; gap: 8px; }
   .chip {
-    border: 1px solid rgba(255,255,255,.16); background: none; color: #ccc;
-    border-radius: 999px; padding: 5px 12px; font-size: 12.5px; cursor: pointer;
+    border: none; background: var(--surface); color: var(--text2);
+    border-radius: 999px; padding: 7px 13px; font-size: 12.5px; cursor: pointer;
+    transition: all .15s;
   }
-  .chip.on { background: #4F46E5; border-color: #4F46E5; color: #fff; }
+  .chip.on { background: rgba(10,132,255,.22); color: var(--accent); font-weight: 600; }
+  .chip.rec-on { background: rgba(255,69,58,.2); color: var(--red); font-weight: 600; }
 
+  /* ---- Transcript history (top, dimmed) ---- */
   #ti-scroll {
-    flex: 1; overflow-y: auto; padding: 4px 12px;
+    flex: 1; overflow-y: auto; padding: 6px 16px;
     display: flex; flex-direction: column;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
   }
-  #ti-list { margin-top: auto; }  /* captions stick to the bottom like real CC */
-  .ti-row { padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
-  .ti-zh { color: #fff; line-height: 1.45; }
-  .ti-en { color: #9a9aa5; line-height: 1.35; margin-top: 2px; }
+  #ti-list { margin-top: auto; }
+  .ti-row { padding: 9px 0; border-bottom: .5px solid var(--hairline); }
+  .ti-row:last-child { border-bottom: none; }
+  .ti-who {
+    display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .4px;
+    border-radius: 5px; padding: 1.5px 6px; margin-bottom: 4px;
+  }
+  .ti-who.me   { background: rgba(48,209,88,.18);  color: var(--green); }
+  .ti-who.them { background: rgba(10,132,255,.18); color: var(--accent); }
+  .ti-zh { color: var(--text); line-height: 1.45; }
+  .ti-en { color: var(--text3); line-height: 1.4; margin-top: 3px; }
   .cap-s .ti-zh { font-size: 15px; } .cap-s .ti-en { font-size: 11.5px; }
-  .cap-m .ti-zh { font-size: 18px; } .cap-m .ti-en { font-size: 12.5px; }
-  .cap-l .ti-zh { font-size: 23px; font-weight: 600; } .cap-l .ti-en { font-size: 13px; }
+  .cap-m .ti-zh { font-size: 17px; } .cap-m .ti-en { font-size: 12.5px; }
+  .cap-l .ti-zh { font-size: 22px; font-weight: 600; } .cap-l .ti-en { font-size: 13px; }
 
-  #ti-interim {
-    flex-shrink: 0; min-height: 20px; padding: 6px 12px;
-    border-top: 1px solid rgba(255,255,255,.08);
+  /* ---- Focus area: the sentence being spoken NOW, front and center ---- */
+  #ti-focus {
+    flex-shrink: 0; min-height: 108px;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center; padding: 14px 20px;
+    border-top: .5px solid var(--hairline);
+    background: linear-gradient(to bottom, rgba(28,28,30,0), rgba(28,28,30,.55));
   }
-  #ti-interim-zh { color: #8b86f2; font-size: 15px; line-height: 1.4; }
-  #ti-interim-en { color: #77777f; font-size: 12px; font-style: italic; }
+  #ti-focus-out {
+    font-size: 24px; font-weight: 600; letter-spacing: -.3px; line-height: 1.35;
+    color: var(--text); min-height: 32px;
+  }
+  #ti-focus-src { font-size: 13px; color: var(--text2); margin-top: 6px; line-height: 1.4; }
+  #ti-focus.idle #ti-focus-out { color: var(--text3); font-weight: 400; font-size: 16px; }
 
-  footer { flex-shrink: 0; padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); }
-  #ti-status { font-size: 12px; color: #9a9aa5; line-height: 1.45; min-height: 17px; margin-bottom: 8px; }
-  .btn-row { display: flex; gap: 8px; }
+  /* ---- Bottom bar ---- */
+  footer {
+    flex-shrink: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+    background: rgba(0,0,0,.72);
+    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    border-top: .5px solid var(--hairline);
+  }
+  #ti-status { font-size: 12px; color: var(--text2); line-height: 1.5; min-height: 17px; margin-bottom: 9px; text-align: center; }
   .btn {
-    border: none; border-radius: 12px; padding: 12px; font-size: 15px;
-    cursor: pointer; font-weight: 600;
+    border: none; border-radius: 14px; padding: 14px; font-size: 16px; font-weight: 600;
+    cursor: pointer; width: 100%; letter-spacing: -.2px;
+    transition: transform .1s, opacity .15s;
   }
-  #ti-toggle { flex: 1; background: #4F46E5; color: #fff; }
-  #ti-toggle.recording { background: #dc3d43; }
-  .btn.ghost { background: rgba(255,255,255,.09); color: #ddd; flex: 0 0 auto; }
+  .btn:active { transform: scale(.985); opacity: .85; }
+  #ti-toggle { background: var(--accent); color: #fff; }
+  #ti-toggle.recording { background: var(--red); }
 
-  /* Settings drawer */
-  #ti-settings {
-    position: fixed; inset: 0; background: #1f1f27; z-index: 10;
-    padding: 16px; overflow-y: auto;
+  /* ---- Sheets (settings / minutes) ---- */
+  .sheet {
+    position: fixed; inset: 0; z-index: 10; overflow-y: auto;
+    background: var(--surface);
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+    animation: rise .22s ease;
   }
-  #ti-settings h2 { font-size: 16px; margin-bottom: 4px; }
-  #ti-settings .sub { font-size: 12px; color: #9a9aa5; line-height: 1.5; margin-bottom: 14px; }
-  #ti-settings label { display: block; font-size: 12.5px; color: #bbb; margin: 12px 0 4px; }
-  #ti-settings input, #ti-settings select {
-    width: 100%; padding: 10px; border-radius: 10px; font-size: 14px;
-    border: 1px solid rgba(255,255,255,.15); background: #14141a; color: #fff;
+  @keyframes rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .sheet h2 { font-size: 20px; font-weight: 700; letter-spacing: -.3px; margin-bottom: 6px; }
+  .sheet .sub { font-size: 13px; color: var(--text2); line-height: 1.55; margin-bottom: 8px; }
+  .sheet label { display: block; font-size: 12.5px; color: var(--text2); margin: 14px 2px 5px; }
+  .sheet input, .sheet select {
+    width: 100%; padding: 11px 12px; border-radius: 10px; font-size: 15px;
+    border: none; background: var(--surface2); color: var(--text);
+    outline: none;
   }
-  #ti-settings .group { margin-top: 18px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
-  #ti-settings .save-row { display: flex; gap: 8px; margin-top: 20px; }
-  #ti-set-save { flex: 1; background: #4F46E5; color: #fff; }
+  .sheet .group { margin-top: 16px; padding-top: 4px; border-top: .5px solid var(--hairline); }
+  .sheet .row { display: flex; gap: 10px; margin-top: 22px; }
+  .sheet .row .btn.primary { background: var(--accent); color: #fff; }
+  .sheet .row .btn.ghost { background: var(--surface2); color: var(--text); flex: 0 0 auto; width: auto; padding: 14px 20px; }
+  #minutes-body {
+    background: var(--surface2); border-radius: 12px; padding: 14px;
+    font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
+    min-height: 120px; margin-top: 10px; color: var(--text);
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>🎧 会议实时翻译</h1>
+  <h1>实时翻译</h1>
   <button id="ti-font" class="icon-btn" title="字号">Aa</button>
   <button id="ti-clear" class="icon-btn" title="清空">🗑</button>
   <button id="ti-gear" class="icon-btn" title="设置">⚙️</button>
 </header>
 
-<div class="chips" id="ti-source">
-  <button class="chip" data-source="system">🔊 会议声音（推荐）</button>
-  <button class="chip" data-source="mic">🎤 麦克风</button>
+<div class="controls">
+  <div class="seg" id="ti-dir">
+    <button class="on" data-dir="en2zh">听对方 英→中</button>
+    <button data-dir="zh2en">我来说 中→英</button>
+    <button data-dir="duplex">双向对话</button>
+  </div>
+  <div class="seg" id="ti-source">
+    <button class="on" data-source="system">🔊 会议声音</button>
+    <button data-source="mic">🎤 麦克风</button>
+  </div>
+  <div class="chips">
+    <button class="chip" id="ti-speak">🔈 朗读</button>
+    <button class="chip" id="ti-rec">⏺ 录音</button>
+    <button class="chip" id="ti-minutes">📝 纪要</button>
+  </div>
 </div>
 
-<div class="chips" id="ti-dir">
-  <button class="chip on" data-dir="en2zh">英语→中文 听对方</button>
-  <button class="chip" data-dir="zh2en">中文→英语 我来说</button>
-</div>
+<div id="ti-scroll"><div id="ti-list" class="cap-m"></div></div>
 
-<div class="chips" id="ti-extra">
-  <button class="chip" id="ti-speak">🔈 朗读翻译</button>
-</div>
-
-<div id="ti-scroll"><div id="ti-list"></div></div>
-
-<div id="ti-interim">
-  <div id="ti-interim-zh"></div>
-  <div id="ti-interim-en"></div>
+<div id="ti-focus" class="idle">
+  <div id="ti-focus-out">字幕会在这里出现</div>
+  <div id="ti-focus-src"></div>
 </div>
 
 <footer>
   <div id="ti-status"></div>
-  <div class="btn-row">
-    <button id="ti-toggle" class="btn">▶ 开始翻译</button>
-  </div>
+  <button id="ti-toggle" class="btn">开始翻译</button>
 </footer>
 
-<div id="ti-settings" class="hidden">
-  <h2>连接翻译服务</h2>
-  <p class="sub">Key 只保存在本机浏览器，不会上传。推荐 Azure：能直接翻译会议声音，且边说边出字幕（免费额度每月 5 小时）。</p>
+<!-- Settings sheet -->
+<div id="ti-settings" class="sheet hidden">
+  <h2>设置</h2>
+  <p class="sub">Key 只保存在本机浏览器，不会上传。推荐 Azure：支持会议声音、双向对话和流式字幕（免费额度每月 5 小时）。</p>
 
   <div class="group">
     <label>Azure Speech Key（portal.azure.com → 创建「语音服务」资源）</label>
@@ -133,7 +202,7 @@
   </div>
 
   <div class="group">
-    <label>备选：AI 翻译（仅麦克风模式可用）</label>
+    <label>AI（会议纪要必需；也是无 Azure 时麦克风模式的翻译引擎）</label>
     <select id="set-provider">
       <option value="claude">Claude</option>
       <option value="deepseek">DeepSeek</option>
@@ -143,13 +212,25 @@
   </div>
 
   <div class="group">
-    <label>朗读输出设备（选虚拟声卡如 CABLE Input，可把翻译语音送进会议；默认走扬声器）</label>
+    <label>朗读输出设备（选虚拟声卡如 CABLE Input 可把语音送进会议；默认走扬声器）</label>
     <select id="set-tts-sink"><option value="">默认扬声器</option></select>
   </div>
 
-  <div class="save-row">
-    <button id="ti-set-save" class="btn">保存</button>
+  <div class="row">
+    <button id="ti-set-save" class="btn primary">保存</button>
     <button id="ti-set-close" class="btn ghost">取消</button>
+  </div>
+</div>
+
+<!-- Minutes sheet -->
+<div id="ti-minutes-sheet" class="sheet hidden">
+  <h2>会议纪要</h2>
+  <p class="sub" id="minutes-hint">根据本次全部字幕自动整理。</p>
+  <div id="minutes-body">生成中…</div>
+  <div class="row">
+    <button id="minutes-copy" class="btn primary">复制</button>
+    <button id="minutes-dl" class="btn ghost">下载</button>
+    <button id="minutes-close" class="btn ghost">关闭</button>
   </div>
 </div>
 
@@ -157,18 +238,16 @@
 <script>
 // Teams meeting live translator — fully self-contained (no other scripts).
 //
-// Two audio sources:
-//   'system' — capture the meeting audio itself via getDisplayMedia (share a
-//              tab/window/screen WITH audio). Hears every remote speaker
-//              clearly, headphones or not. Requires an Azure Speech key,
-//              because only the Speech SDK accepts a custom MediaStream.
-//   'mic'    — the microphone. With an Azure key it streams through the
-//              TranslationRecognizer (partial translations appear while the
-//              person is still talking); without one it falls back to the
-//              browser SpeechRecognition + a one-shot AI translation per
-//              sentence (Claude or DeepSeek).
+// Directions:
+//   en2zh  — listen to English (meeting audio or mic), Chinese captions
+//   zh2en  — speak Chinese into the mic, English captions (read them out,
+//            or let TTS + a virtual cable speak them into the meeting)
+//   duplex — BOTH at once: meeting audio en→zh labeled 「对方」 and your mic
+//            zh→en labeled 「我」. Azure + screen-audio capture required.
 //
-// Subtitles only — nothing is read aloud, so it never talks over the meeting.
+// Extras: per-sentence voice output (TTS), meeting audio recording
+// (mic + meeting mixed into one downloadable file), and AI meeting minutes
+// generated from the accumulated transcript.
 
 // ---------------------------------------------------------------------------
 // Settings — localStorage only; keys never leave this browser.
@@ -196,28 +275,27 @@ const Store = {
 };
 
 // ---------------------------------------------------------------------------
-// Fallback translator: one-shot LLM call per finished sentence (mic mode
-// without Azure). Called directly from the browser — no backend.
+// LLM calls (translation fallback + meeting minutes). Browser-direct, no backend.
 const AI = {
   DEFAULTS: { claude: 'claude-haiku-4-5-20251001', deepseek: 'deepseek-chat' },
   SYSTEMS: {
     en2zh: 'You are a translation engine. Translate the English text to natural, concise Simplified Chinese. Output ONLY the translation, nothing else.',
     zh2en: 'You are a translation engine. Translate the Chinese text to natural, concise English. Output ONLY the translation, nothing else.',
   },
+  MINUTES_SYS: '你是会议纪要助手。根据提供的会议字幕（可能中英混合、有识别噪音），输出一份简体中文会议纪要，格式：\n## 会议主题\n## 讨论要点\n（分条列出）\n## 达成的决定\n## 待办事项\n（谁、做什么、何时，如果字幕里有提到）\n只输出纪要本身，不要客套话。字幕里信息不足的部分写"未提及"。',
 
   configured() { return !!Store.get('apiKey'); },
 
-  async translate(text, dir) {
+  async _oneShot(sys, user, maxTokens) {
     const provider = Store.get('provider');
     const key = Store.get('apiKey');
     if (!key) throw new Error('no-key');
-    const sys = this.SYSTEMS[dir] || this.SYSTEMS.en2zh;
     if (provider === 'deepseek') {
       const res = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'Authorization': 'Bearer ' + key },
-        body: JSON.stringify({ model: this.DEFAULTS.deepseek, max_tokens: 200, messages: [
-          { role: 'system', content: sys }, { role: 'user', content: text },
+        body: JSON.stringify({ model: this.DEFAULTS.deepseek, max_tokens: maxTokens, messages: [
+          { role: 'system', content: sys }, { role: 'user', content: user },
         ] }),
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -229,20 +307,27 @@ const AI = {
         'content-type': 'application/json', 'x-api-key': key,
         'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true',
       },
-      body: JSON.stringify({ model: this.DEFAULTS.claude, max_tokens: 200, system: sys, messages: [{ role: 'user', content: text }] }),
+      body: JSON.stringify({ model: this.DEFAULTS.claude, max_tokens: maxTokens, system: sys, messages: [{ role: 'user', content: user }] }),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     return (data.content || []).map(c => c.text || '').join('').trim();
   },
+
+  translate(text, dir) {
+    return this._oneShot(this.SYSTEMS[dir] || this.SYSTEMS.en2zh, text, 200);
+  },
+
+  minutes(transcriptText) {
+    return this._oneShot(this.MINUTES_SYS, transcriptText, 1500);
+  },
 };
 
 // ---------------------------------------------------------------------------
 // Voice output: read each finished translation aloud. Azure neural TTS when
-// configured (human-like, and its <audio> element can be routed to a chosen
-// output device — e.g. a virtual audio cable feeding the Teams microphone);
-// otherwise the browser voice (default device only). Sentences play through
-// a sequential queue so they never overlap.
+// configured (human-like, and routable to a chosen output device — e.g. a
+// virtual audio cable feeding the Teams microphone); otherwise the browser
+// voice. Sentences play through a sequential queue so they never overlap.
 const TTS = {
   enabled: false,
   queue: Promise.resolve(),
@@ -328,6 +413,47 @@ const TTS = {
 };
 
 // ---------------------------------------------------------------------------
+// Meeting recording: mix any number of input streams (your mic + captured
+// meeting audio) into one track and record it. Stopping triggers a download.
+const Recorder = {
+  active: false,
+  mr: null, ctx: null, chunks: [], _ownStreams: [],
+
+  async start(streams) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AC();
+    const dest = this.ctx.createMediaStreamDestination();
+    let connected = 0;
+    streams.filter(Boolean).forEach(s => {
+      try { this.ctx.createMediaStreamSource(s).connect(dest); connected++; } catch {}
+    });
+    if (!connected) throw new Error('no-audio');
+    this.chunks = [];
+    this.mr = new MediaRecorder(dest.stream, { mimeType: 'audio/webm' });
+    this.mr.ondataavailable = (e) => { if (e.data && e.data.size) this.chunks.push(e.data); };
+    this.mr.start(1000);
+    this.active = true;
+  },
+
+  stop() {
+    this.active = false;
+    return new Promise((resolve) => {
+      if (!this.mr) { resolve(null); return; }
+      const mr = this.mr;
+      this.mr = null;
+      mr.onstop = () => {
+        this._ownStreams.forEach(s => s.getTracks().forEach(t => t.stop()));
+        this._ownStreams = [];
+        try { this.ctx.close(); } catch {}
+        this.ctx = null;
+        resolve(this.chunks.length ? new Blob(this.chunks, { type: 'audio/webm' }) : null);
+      };
+      try { mr.stop(); } catch { mr.onstop(); }
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Azure Speech SDK, loaded from CDN only when first needed.
 let _sdkPromise = null;
 function loadSpeechSDK() {
@@ -346,12 +472,12 @@ function loadSpeechSDK() {
 // ---------------------------------------------------------------------------
 const TeamsInterp = {
   active: false,
-  source: 'system',   // 'system' | 'mic'
-  dir: 'en2zh',       // 'en2zh' (listen to English) | 'zh2en' (speak Chinese)
-  rec: null,          // Azure TranslationRecognizer OR browser SpeechRecognition
-  engine: null,       // 'azure' | 'webspeech'
-  stream: null,       // display-capture stream (system mode)
-  fontIdx: 1,         // 0 small, 1 medium, 2 large
+  dir: 'en2zh',       // 'en2zh' | 'zh2en' | 'duplex'
+  source: 'system',   // 'system' | 'mic' (ignored in duplex: it uses both)
+  recs: [],           // running recognizers (browser SR or Azure)
+  stream: null,       // captured meeting-audio stream
+  transcript: [],     // {who, src, out} — feeds the minutes generator
+  fontIdx: 1,
   FONTS: ['cap-s', 'cap-m', 'cap-l'],
 
   init() {
@@ -363,43 +489,34 @@ const TeamsInterp = {
       }).catch(() => {});
     }
 
-    document.querySelectorAll('#ti-source .chip').forEach(btn => {
-      btn.onclick = () => {
-        if (this.active) this.stop();
-        this.source = btn.dataset.source;
-        document.querySelectorAll('#ti-source .chip').forEach(b => b.classList.remove('on'));
-        btn.classList.add('on');
-        this.hint();
-      };
-    });
-    // System-audio capture needs getDisplayMedia — absent on phones and in
-    // some embedded webviews. Fall back to mic-only when unavailable.
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-      const sys = document.querySelector('#ti-source [data-source="system"]');
-      if (sys) sys.classList.add('hidden');
-      this.source = 'mic';
-      const mic = document.querySelector('#ti-source [data-source="mic"]');
-      if (mic) mic.classList.add('on');
-    } else {
-      const sys = document.querySelector('#ti-source [data-source="system"]');
-      if (sys) sys.classList.add('on');
-    }
+    const displayOK = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
 
-    document.querySelectorAll('#ti-dir .chip').forEach(btn => {
+    document.querySelectorAll('#ti-dir button').forEach(btn => {
       btn.onclick = () => {
         if (this.active) this.stop();
         this.dir = btn.dataset.dir;
-        document.querySelectorAll('#ti-dir .chip').forEach(b => b.classList.remove('on'));
+        document.querySelectorAll('#ti-dir button').forEach(b => b.classList.remove('on'));
         btn.classList.add('on');
-        // Speaking Chinese is almost always done into the microphone.
-        if (this.dir === 'zh2en' && this.source === 'system') {
-          const mic = document.querySelector('#ti-source [data-source="mic"]');
-          if (mic) mic.click();
-          return;
-        }
+        // Speaking Chinese happens into the mic; duplex fixes its own sources.
+        if (this.dir === 'zh2en') this.setSource('mic');
+        if (this.dir === 'en2zh') this.setSource(displayOK ? 'system' : 'mic');
+        document.getElementById('ti-source').classList.toggle('hidden', this.dir === 'duplex');
         this.hint();
       };
     });
+    document.querySelectorAll('#ti-source button').forEach(btn => {
+      btn.onclick = () => {
+        if (this.active) this.stop();
+        this.setSource(btn.dataset.source);
+        this.hint();
+      };
+    });
+    if (!displayOK) {
+      // Phones/webviews without screen-audio capture: mic only, no duplex.
+      document.querySelector('#ti-source [data-source="system"]').classList.add('hidden');
+      document.querySelector('#ti-dir [data-dir="duplex"]').classList.add('hidden');
+      this.setSource('mic');
+    }
 
     // Voice-output toggle (persisted).
     const sp = document.getElementById('ti-speak');
@@ -410,12 +527,26 @@ const TeamsInterp = {
       Store.setAll({ ttsOn: TTS.enabled });
       sp.classList.toggle('on', TTS.enabled);
       if (!TTS.enabled) TTS.stop();
-      else this.status('已开启朗读：每句翻译完会读出来。想让对方在会议里听到，见设置里的「朗读输出设备」');
+      else this.status('已开启朗读。想让对方在会议里听到，见设置里的「朗读输出设备」');
+    };
+
+    document.getElementById('ti-rec').onclick = () => this.toggleRecord();
+    document.getElementById('ti-minutes').onclick = () => this.makeMinutes();
+    document.getElementById('minutes-close').onclick = () => document.getElementById('ti-minutes-sheet').classList.add('hidden');
+    document.getElementById('minutes-copy').onclick = () => {
+      const t = document.getElementById('minutes-body').textContent;
+      navigator.clipboard && navigator.clipboard.writeText(t).then(() => this.status('纪要已复制')).catch(() => {});
+      document.getElementById('ti-minutes-sheet').classList.add('hidden');
+    };
+    document.getElementById('minutes-dl').onclick = () => {
+      this.download(new Blob([document.getElementById('minutes-body').textContent], { type: 'text/markdown' }),
+        'meeting-minutes-' + this.stamp() + '.md');
     };
 
     document.getElementById('ti-toggle').onclick = () => this.toggle();
     document.getElementById('ti-clear').onclick = () => {
       document.getElementById('ti-list').innerHTML = '';
+      this.transcript = [];
     };
     document.getElementById('ti-font').onclick = () => {
       this.fontIdx = (this.fontIdx + 1) % this.FONTS.length;
@@ -423,9 +554,7 @@ const TeamsInterp = {
       list.classList.remove(...this.FONTS);
       list.classList.add(this.FONTS[this.fontIdx]);
     };
-    document.getElementById('ti-list').classList.add(this.FONTS[this.fontIdx]);
 
-    // Settings drawer.
     document.getElementById('ti-gear').onclick = () => this.openSettings();
     document.getElementById('ti-set-close').onclick = () => {
       document.getElementById('ti-settings').classList.add('hidden');
@@ -435,23 +564,31 @@ const TeamsInterp = {
     this.hint();
   },
 
+  setSource(src) {
+    this.source = src;
+    document.querySelectorAll('#ti-source button').forEach(b =>
+      b.classList.toggle('on', b.dataset.source === src));
+  },
+
   azureConfigured() { return !!(Store.get('azureKey') && Store.get('azureRegion')); },
   webSpeechSupported() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); },
 
   // Contextual guidance shown before starting.
   hint() {
     if (this.active) return;
-    const zh2en = this.dir === 'zh2en';
     let msg;
     if (!this.azureConfigured() && !AI.configured()) {
       msg = '先点右上 ⚙️ 填写 Azure Key（推荐）或 AI Key';
+    } else if (this.dir === 'duplex') {
+      msg = this.azureConfigured()
+        ? '双向：会议声音→中文字幕（对方），你的麦克风→英文字幕（我）。点开始后共享屏幕/标签页并勾选「共享音频」'
+        : '双向对话需要 Azure Speech Key → 点右上 ⚙️ 填写';
     } else if (this.source === 'system') {
       msg = this.azureConfigured()
-        ? (zh2en ? '将把会议声音里的中文翻成英文。' : '')
-          + '点开始后选「整个屏幕」或 Teams 所在标签页，并勾选「共享音频」'
-        : '系统声音模式需要 Azure Speech Key（免费额度每月 5 小时）→ 点右上 ⚙️ 填写';
-    } else if (zh2en) {
-      msg = '你说中文，实时出英文字幕（可以照着读给对方听）';
+        ? '点开始后选「整个屏幕」或 Teams 所在标签页，并勾选「共享音频」'
+        : '会议声音模式需要 Azure Speech Key（免费额度每月 5 小时）→ 点右上 ⚙️ 填写';
+    } else if (this.dir === 'zh2en') {
+      msg = '你说中文，实时出英文字幕（可照着读，或开启 🔈 朗读）';
     } else {
       msg = '麦克风模式：外放开会或现场会议时使用（戴耳机时收不到对方声音）';
     }
@@ -460,26 +597,37 @@ const TeamsInterp = {
 
   toggle() { this.active ? this.stop() : this.start(); },
 
+  async captureMeetingAudio() {
+    // Chrome only exposes tab/system audio alongside a video track; we drop
+    // the video immediately and keep just the audio.
+    const disp = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    const tracks = disp.getAudioTracks();
+    if (!tracks.length) {
+      disp.getTracks().forEach(t => t.stop());
+      throw new Error('没拿到声音——共享时要勾选左下角「共享标签页/系统音频」，再试一次');
+    }
+    disp.getVideoTracks().forEach(t => t.stop());
+    this.stream = new MediaStream(tracks);
+    // If the user hits the browser's own "stop sharing" bar, shut down too.
+    tracks[0].onended = () => { if (this.active) this.stop(); };
+    return this.stream;
+  },
+
   async start() {
     try {
-      if (this.source === 'system') {
-        if (!this.azureConfigured()) { this.openSettings(); this.status('系统声音模式需要 Azure Speech Key'); return; }
-        // Chrome only exposes tab/system audio alongside a video track;
-        // we drop the video immediately and keep just the audio.
-        const disp = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        const tracks = disp.getAudioTracks();
-        if (!tracks.length) {
-          disp.getTracks().forEach(t => t.stop());
-          this.status('没拿到声音——共享时要勾选左下角「共享标签页/系统音频」，再试一次');
-          return;
-        }
-        disp.getVideoTracks().forEach(t => t.stop());
-        this.stream = new MediaStream(tracks);
-        // If the user hits the browser's own "stop sharing" bar, shut down too.
-        tracks[0].onended = () => { if (this.active) this.stop(); };
-        await this.startAzure(this.stream);
+      if (this.dir === 'duplex') {
+        if (!this.azureConfigured()) { this.openSettings(); this.status('双向对话需要 Azure Speech Key'); return; }
+        const meeting = await this.captureMeetingAudio();
+        await this.startAzure({ stream: meeting, from: 'en-US', to: 'zh-Hans', who: 'them' });
+        await this.startAzure({ stream: null, from: 'zh-CN', to: 'en', who: 'me' });
+      } else if (this.source === 'system') {
+        if (!this.azureConfigured()) { this.openSettings(); this.status('会议声音模式需要 Azure Speech Key'); return; }
+        const meeting = await this.captureMeetingAudio();
+        const zh2en = this.dir === 'zh2en';
+        await this.startAzure({ stream: meeting, from: zh2en ? 'zh-CN' : 'en-US', to: zh2en ? 'en' : 'zh-Hans', who: '' });
       } else if (this.azureConfigured()) {
-        await this.startAzure(null);
+        const zh2en = this.dir === 'zh2en';
+        await this.startAzure({ stream: null, from: zh2en ? 'zh-CN' : 'en-US', to: zh2en ? 'en' : 'zh-Hans', who: '' });
       } else if (this.webSpeechSupported() && AI.configured()) {
         this.startWebSpeech();
       } else {
@@ -494,40 +642,39 @@ const TeamsInterp = {
     }
     this.active = true;
     const btn = document.getElementById('ti-toggle');
-    btn.textContent = '⏹ 停止';
+    btn.textContent = '停止';
     btn.classList.add('recording');
-    this.status(this.source === 'system' ? '正在听会议声音…' : '正在听麦克风…');
+    this.focusIdle('正在听…');
+    this.status(this.dir === 'duplex' ? '双向进行中：蓝=对方，绿=我'
+      : this.source === 'system' ? '正在听会议声音…' : '正在听麦克风…');
   },
 
-  // Azure streaming speech translation: en → zh-Hans in one call, partial
-  // results included — the same engine behind Teams' own live captions.
-  async startAzure(stream) {
+  // One Azure streaming translation channel. duplex runs two of these.
+  async startAzure({ stream, from, to, who }) {
     await loadSpeechSDK();
     const SDK = window.SpeechSDK;
     const cfg = SDK.SpeechTranslationConfig.fromSubscription(
       (Store.get('azureKey') || '').replace(/\s+/g, ''),
       (Store.get('azureRegion') || '').trim().toLowerCase());
-    const zh2en = this.dir === 'zh2en';
-    cfg.speechRecognitionLanguage = zh2en ? 'zh-CN' : 'en-US';
-    const target = zh2en ? 'en' : 'zh-Hans';
-    cfg.addTargetLanguage(target);
+    cfg.speechRecognitionLanguage = from;
+    cfg.addTargetLanguage(to);
     // Finalize a sentence ~0.6s after the speaker pauses (default ~2s lags).
     try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '600'); } catch {}
     const audio = stream
       ? SDK.AudioConfig.fromStreamInput(stream)
       : SDK.AudioConfig.fromDefaultMicrophoneInput();
     const rec = new SDK.TranslationRecognizer(cfg, audio);
-    this.engine = 'azure';
-    this.rec = rec;
-    const outOf = (r) => { try { return r.translations.get(target) || ''; } catch { return ''; } };
+    rec._engine = 'azure';
+    this.recs.push(rec);
+    const outOf = (r) => { try { return r.translations.get(to) || ''; } catch { return ''; } };
     rec.recognizing = (s, e) => {
-      if (e.result && e.result.text) this.interim(e.result.text, outOf(e.result));
+      if (e.result && e.result.text) this.focusLive(e.result.text, outOf(e.result), who);
     };
     rec.recognized = (s, e) => {
       const r = e.result;
       if (r && r.reason === SDK.ResultReason.TranslatedSpeech && r.text.trim()) {
-        this.interim('', '');
-        this.addLine(r.text.trim(), outOf(r).trim());
+        this.focusIdle('正在听…');
+        this.addLine(r.text.trim(), outOf(r).trim(), who);
       }
     };
     rec.canceled = (s, e) => {
@@ -561,14 +708,15 @@ const TeamsInterp = {
           interimText += r[0].transcript;
         }
       }
-      this.interim(interimText, '');
+      this.focusLive(interimText, '', '');
       this._pending = interimText.trim();
       // If the speaker pauses ~1.4s without a final result, commit the
       // interim text now instead of waiting.
       if (this._idle) clearTimeout(this._idle);
       if (this._pending) {
         this._idle = setTimeout(() => {
-          if (this.rec) { try { this.rec.stop(); } catch {} }
+          const r0 = this.recs[0];
+          if (r0) { try { r0.stop(); } catch {} }
         }, 1400);
       }
     };
@@ -578,8 +726,8 @@ const TeamsInterp = {
       if (this._pending) { this.addLineAI(this._pending); this._pending = ''; }
       if (this.active) { try { rec.start(); } catch {} }
     };
-    this.engine = 'webspeech';
-    this.rec = rec;
+    rec._engine = 'webspeech';
+    this.recs.push(rec);
     this._pending = '';
     rec.start();
   },
@@ -589,75 +737,158 @@ const TeamsInterp = {
     this.cleanup();
     TTS.stop();
     const btn = document.getElementById('ti-toggle');
-    btn.textContent = '▶ 开始翻译';
+    btn.textContent = '开始翻译';
     btn.classList.remove('recording');
-    this.interim('', '');
+    this.focusIdle('字幕会在这里出现');
     this.hint();
   },
 
   cleanup() {
     if (this._idle) { clearTimeout(this._idle); this._idle = null; }
     this._pending = '';
-    const rec = this.rec;
-    this.rec = null;
-    if (rec) {
+    const recs = this.recs;
+    this.recs = [];
+    recs.forEach(rec => {
       try {
-        if (this.engine === 'azure') rec.stopContinuousRecognitionAsync(() => { try { rec.close(); } catch {} }, () => {});
+        if (rec._engine === 'azure') rec.stopContinuousRecognitionAsync(() => { try { rec.close(); } catch {} }, () => {});
         else rec.stop();
       } catch {}
-    }
+    });
     if (this.stream) {
       this.stream.getTracks().forEach(t => t.stop());
       this.stream = null;
     }
-    this.engine = null;
   },
 
-  // Live (unfinished) line pinned under the list.
-  interim(en, zh) {
-    document.getElementById('ti-interim-en').textContent = en;
-    document.getElementById('ti-interim-zh').textContent = zh;
+  // ---- Focus area (the sentence being spoken right now) ----
+  focusLive(src, out, who) {
+    const box = document.getElementById('ti-focus');
+    box.classList.remove('idle');
+    const prefix = who === 'me' ? '我：' : who === 'them' ? '对方：' : '';
+    document.getElementById('ti-focus-out').textContent = out || '…';
+    document.getElementById('ti-focus-src').textContent = prefix + (src || '');
+  },
+  focusIdle(msg) {
+    const box = document.getElementById('ti-focus');
+    box.classList.add('idle');
+    document.getElementById('ti-focus-out').textContent = msg;
+    document.getElementById('ti-focus-src').textContent = '';
   },
 
-  // Finalized sentence with its translation already available (Azure path).
-  addLine(en, zh) {
+  // ---- Finalized captions ----
+  _row(src, out, who) {
     const list = document.getElementById('ti-list');
     const row = document.createElement('div');
     row.className = 'ti-row';
-    row.innerHTML = '<div class="ti-zh"></div><div class="ti-en"></div>';
-    row.querySelector('.ti-zh').textContent = zh || '…';
-    row.querySelector('.ti-en').textContent = en;
+    if (who) {
+      const tag = document.createElement('span');
+      tag.className = 'ti-who ' + who;
+      tag.textContent = who === 'me' ? '我' : '对方';
+      row.appendChild(tag);
+    }
+    const zh = document.createElement('div'); zh.className = 'ti-zh';
+    const en = document.createElement('div'); en.className = 'ti-en';
+    zh.textContent = out;
+    en.textContent = src;
+    row.appendChild(zh); row.appendChild(en);
     list.appendChild(row);
     this.trimAndScroll(list);
-    TTS.speak(zh, this.dir === 'zh2en' ? 'en' : 'zh');
+    return row;
   },
 
-  // Finalized sentence that still needs translating (web-speech path).
-  async addLineAI(en) {
-    const list = document.getElementById('ti-list');
-    const row = document.createElement('div');
-    row.className = 'ti-row';
-    row.innerHTML = '<div class="ti-zh">翻译中…</div><div class="ti-en"></div>';
-    row.querySelector('.ti-en').textContent = en;
-    list.appendChild(row);
-    this.trimAndScroll(list);
+  addLine(src, out, who) {
+    this._row(src, out || '…', who);
+    this.transcript.push({ who, src, out });
+    const lang = (who === 'me' || this.dir === 'zh2en') ? 'en' : 'zh';
+    TTS.speak(out, lang);
+  },
+
+  async addLineAI(src) {
+    const row = this._row(src, '翻译中…', '');
     try {
-      const zh = await AI.translate(en, this.dir);
-      row.querySelector('.ti-zh').textContent = zh;
-      TTS.speak(zh, this.dir === 'zh2en' ? 'en' : 'zh');
+      const out = await AI.translate(src, this.dir);
+      row.querySelector('.ti-zh').textContent = out;
+      this.transcript.push({ who: '', src, out });
+      TTS.speak(out, this.dir === 'zh2en' ? 'en' : 'zh');
     } catch {
       row.querySelector('.ti-zh').textContent = '（翻译失败，检查 Key/网络）';
     }
-    this.trimAndScroll(list);
+    this.trimAndScroll(document.getElementById('ti-list'));
   },
 
   // Keep the DOM bounded during hour-long meetings and pin scroll to bottom.
   trimAndScroll(list) {
-    while (list.children.length > 200) list.removeChild(list.firstChild);
+    while (list.children.length > 300) list.removeChild(list.firstChild);
     const wrap = document.getElementById('ti-scroll');
     wrap.scrollTop = wrap.scrollHeight;
   },
 
+  // ---- Recording (mic + meeting audio mixed) ----
+  async toggleRecord() {
+    const chip = document.getElementById('ti-rec');
+    if (Recorder.active) {
+      const blob = await Recorder.stop();
+      chip.classList.remove('rec-on');
+      chip.textContent = '⏺ 录音';
+      if (blob) {
+        this.download(blob, 'meeting-recording-' + this.stamp() + '.webm');
+        this.status('录音已保存到下载');
+      } else {
+        this.status('没有录到声音');
+      }
+      return;
+    }
+    try {
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+      Recorder._ownStreams.push(mic);
+      // Include the meeting audio when we're already capturing it; otherwise
+      // record the mic only (start 会议声音/双向 mode first to include 对方).
+      await Recorder.start([mic, this.stream]);
+      chip.classList.add('rec-on');
+      chip.textContent = '⏺ 录音中';
+      this.status(this.stream ? '录音中：我 + 会议声音' : '录音中：仅麦克风（先开启会议声音/双向模式可同时录对方）');
+    } catch (err) {
+      this.status('无法开始录音：' + (err && err.message ? err.message : '麦克风权限被拒绝'));
+    }
+  },
+
+  // ---- Meeting minutes ----
+  async makeMinutes() {
+    if (!this.transcript.length) { this.status('还没有字幕内容，先翻译一会儿再生成纪要'); return; }
+    if (!AI.configured()) { this.openSettings(); this.status('生成纪要需要 AI Key（Claude 或 DeepSeek）'); return; }
+    const sheet = document.getElementById('ti-minutes-sheet');
+    const body = document.getElementById('minutes-body');
+    document.getElementById('minutes-hint').textContent = '共 ' + this.transcript.length + ' 句字幕';
+    body.textContent = '生成中…';
+    sheet.classList.remove('hidden');
+    const text = this.transcript.map(l => {
+      const who = l.who === 'me' ? '我' : l.who === 'them' ? '对方' : '发言';
+      return who + '：' + l.src + (l.out ? '（' + l.out + '）' : '');
+    }).join('\n');
+    try {
+      body.textContent = await AI.minutes(text.slice(-24000)); // keep prompt bounded
+    } catch (err) {
+      body.textContent = '生成失败：' + (err && err.message ? err.message : '') + '\n检查 AI Key 与网络后重试。';
+    }
+  },
+
+  // ---- Utilities ----
+  download(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  },
+
+  stamp() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes());
+  },
+
+  // ---- Settings ----
   openSettings() {
     document.getElementById('set-azure-key').value = Store.get('azureKey') || '';
     document.getElementById('set-azure-region').value = Store.get('azureRegion') || '';
@@ -714,22 +945,21 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!CONFIG_MODE) { TeamsInterp.init(); return; }
   document.body.innerHTML =
     '<div style="padding:24px 20px;line-height:1.7;font-size:15px">' +
-    '<b>\ud83c\udfa7 \u4f1a\u8bae\u5b9e\u65f6\u7ffb\u8bd1</b><br>\u628a\u82f1\u8bed\u53d1\u8a00\u5b9e\u65f6\u7ffb\u8bd1\u6210\u4e2d\u6587\u5b57\u5e55\uff0c\u663e\u793a\u5728\u4f1a\u8bae\u4fa7\u8fb9\u680f\u3002<br>\u70b9\u51fb\u4e0b\u65b9\u300c\u4fdd\u5b58\u300d\u5373\u53ef\u6dfb\u52a0\uff0c\u65e0\u9700\u5176\u4ed6\u914d\u7f6e\u3002</div>';
+    '<b>🎧 会议实时翻译</b><br>把英语发言实时翻译成中文字幕，显示在会议侧边栏。<br>点击下方「保存」即可添加，无需其他配置。</div>';
   if (!window.microsoftTeams || !microsoftTeams.app) return;
   const base = location.origin + location.pathname;
   microsoftTeams.app.initialize().then(() => {
     microsoftTeams.pages.config.registerOnSaveHandler((ev) => {
       microsoftTeams.pages.config.setConfig({
         entityId: 'live-translator',
-        suggestedDisplayName: '\u5b9e\u65f6\u7ffb\u8bd1',
+        suggestedDisplayName: '实时翻译',
         contentUrl: base,
         websiteUrl: base,
-      }).then(() => ev.notifySuccess()).catch(() => ev.notifyFailure('\u4fdd\u5b58\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5'));
+      }).then(() => ev.notifySuccess()).catch(() => ev.notifyFailure('保存失败，请重试'));
     });
     microsoftTeams.pages.config.setValidityState(true);
   }).catch(() => {});
 });
-
 </script>
 </body>
 </html>
