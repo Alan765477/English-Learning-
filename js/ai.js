@@ -18,7 +18,7 @@ const AI = {
 
   SYSTEM: `You are a warm, encouraging English conversation tutor for a Chinese learner who wants to improve speaking and listening.
 Rules:
-- ALWAYS start with a spoken English reply of 1-3 natural sentences, and always ask a follow-up question to keep the learner talking. Never leave the spoken reply empty.
+- ALWAYS open with a very short standalone reaction sentence of 2-5 words (like "Oh, nice!" / "Good question!" / "That sounds fun."), THEN continue with 1-3 natural sentences, and always ask a follow-up question to keep the learner talking. Never leave the spoken reply empty.
 - Even if the learner writes in Chinese, answer their question in simple English, then warmly encourage them to try saying it in English.
 - Use everyday, idiomatic English at an upper-intermediate level.
 - Only AFTER the spoken reply, if the learner's English has grammar or word-choice mistakes, add a line containing only "---" then a brief correction in Chinese (the mistake + the natural version). If there are no mistakes, do NOT add the "---" line at all.
@@ -42,6 +42,14 @@ Rules:
       btn.onclick = () => this.send(btn.dataset.topic);
     });
     document.getElementById('ai-setup').onclick = () => { if (window.Sheet) Sheet.open('sheet-ai'); };
+    // Hands-free toggle.
+    const auto = document.getElementById('ai-auto');
+    auto.classList.toggle('on', this.autoTalk());
+    auto.onclick = () => {
+      Store.set('autoTalk', !this.autoTalk());
+      auto.classList.toggle('on', this.autoTalk());
+      if (!this.autoTalk() && this.state === 'listening') this.stopListen();
+    };
     this.updateSetup();
   },
 
@@ -81,14 +89,24 @@ Rules:
   },
 
   toggleTalk() {
-    if (this.state === 'listening') { Speech.stopRecognition(); return; }
+    if (this.state === 'listening') { this.stopListen(); return; }
     if (this.busy) return;
     this.listen();
   },
 
+  stopListen() {
+    Speech.stopRecognition();
+    if (window.Azure) Azure.stopRecognize();
+  },
+
+  autoTalk() { return !!Store.get('autoTalk'); },
+
   async listen() {
     if (!this.configured()) { if (window.Sheet) Sheet.open('sheet-ai'); return; }
-    if (!Speech.recognitionSupported()) {
+    // Azure STT when configured: ~1s faster end-of-speech detection (500ms
+    // silence vs the browser's untunable ~1.5s) and better accuracy.
+    const useAzure = window.Azure && Azure.ttsConfigured();
+    if (!useAzure && !Speech.recognitionSupported()) {
       this.warn('此浏览器不支持语音输入，点键盘图标改用打字（建议用 Safari）。');
       return;
     }
@@ -99,18 +117,30 @@ Rules:
     this.setState('listening', '聆听中…（说完停顿一下即可）');
     if (window.MicLevel) MicLevel.start(); // non-iOS: the orb follows your voice
     const sub = document.getElementById('ai-sub-user');
+    const onInterim = (interim) => { if (interim) sub.textContent = '🗣 ' + interim; };
     try {
       // Live transcript while you talk — feedback starts immediately.
-      const text = await Speech.recognizeOnce((interim) => {
-        if (interim) sub.textContent = '🗣 ' + interim;
-      });
+      const text = useAzure
+        ? await Azure.recognizeOnce(onInterim)
+        : await Speech.recognizeOnce(onInterim);
       if (text) this.send(text);
       else this.setState('idle', '没听清，点麦克风再说一次');
     } catch (e) {
-      this.setState('idle', '没听清，点麦克风再说一次');
+      if (this.state === 'listening') this.setState('idle', '没听清，点麦克风再说一次');
     } finally {
       if (window.MicLevel) MicLevel.stop();
     }
+  },
+
+  // Hands-free loop: when a reply finishes speaking, reopen the mic —
+  // only if the toggle is on and the AI screen is still front-most.
+  maybeAutoListen(gen) {
+    if (gen !== this._gen || !this.autoTalk() || this.busy) return;
+    if (document.hidden) return;
+    if (document.getElementById('view-ai').classList.contains('hidden')) return;
+    setTimeout(() => {
+      if (gen === this._gen && this.state === 'idle' && !this.busy) this.listen();
+    }, 350);
   },
 
   sendText() {
@@ -222,9 +252,13 @@ Rules:
     }
     if (correction) document.getElementById('ai-sub-corr').textContent = '📝 ' + correction;
     this.lastSpoken = spoken;
-    // When the last queued sentence finishes, come back to rest.
+    // When the last queued sentence finishes, come back to rest — then, in
+    // hands-free mode, reopen the mic automatically.
     this._chain = this._chain.then(() => {
-      if (gen === this._gen && this.state === 'speaking') this.setState('idle', '点麦克风接着说');
+      if (gen === this._gen && this.state === 'speaking') {
+        this.setState('idle', this.autoTalk() ? '' : '点麦克风接着说');
+        this.maybeAutoListen(gen);
+      }
     });
   },
 

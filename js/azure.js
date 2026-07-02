@@ -234,6 +234,46 @@ const Azure = {
   stopAssess() {
     if (this._assessRec) { try { this._assessRec.close(); } catch {} this._assessRec = null; }
   },
+
+  // Conversational speech-to-text via the Speech SDK. Much lower latency than
+  // the browser recognizer: end-of-speech silence is set to 500ms (the
+  // browser's is ~1-1.5s and not tunable). Resolves with the transcript.
+  async recognizeOnce(onInterim) {
+    await this.loadSDK();
+    const SDK = window.SpeechSDK;
+    const cfg = SDK.SpeechConfig.fromSubscription(
+      (Store.get('azureKey') || '').replace(/\s+/g, ''),
+      (Store.get('azureRegion') || '').trim().toLowerCase());
+    cfg.speechRecognitionLanguage = 'en-US';
+    try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '500'); } catch {}
+    const audio = SDK.AudioConfig.fromDefaultMicrophoneInput();
+    const rec = new SDK.SpeechRecognizer(cfg, audio);
+    if (onInterim) rec.recognizing = (s, e) => { try { onInterim((e.result && e.result.text) || ''); } catch {} };
+    return new Promise((resolve, reject) => {
+      this._convRec = rec;
+      this._convReject = reject; // stopRecognize() settles the promise
+      const finish = (fn, v) => {
+        this._convRec = null; this._convReject = null;
+        try { rec.close(); } catch {}
+        fn(v);
+      };
+      rec.recognizeOnceAsync(
+        (result) => {
+          const text = ((result && result.text) || '').trim();
+          text ? finish(resolve, text) : finish(reject, new Error('no-speech'));
+        },
+        (err) => finish(reject, new Error(err || 'stt-error')));
+    });
+  },
+
+  // Abort an in-flight conversational recognition (mic tapped again).
+  stopRecognize() {
+    if (!this._convRec) return;
+    const rec = this._convRec, rej = this._convReject;
+    this._convRec = null; this._convReject = null;
+    try { rec.close(); } catch {}
+    if (rej) rej(new Error('aborted'));
+  },
 };
 
 // `const Azure` does NOT become a property of window, so other scripts that

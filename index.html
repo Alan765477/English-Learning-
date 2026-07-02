@@ -10,9 +10,9 @@
   <meta name="apple-mobile-web-app-title" content="英语听说" />
   <title>英语听说训练</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=29" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=30" />
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
-  <link rel="stylesheet" href="css/style.css?v=29" />
+  <link rel="stylesheet" href="css/style.css?v=30" />
 </head>
 <body>
   <div id="app">
@@ -154,8 +154,9 @@
 
     <!-- AI 口语陪练（纯语音） -->
     <section class="view hidden" id="view-ai">
-      <header class="view-header">
+      <header class="view-header ai-header">
         <h1>陪练</h1>
+        <button class="chip" id="ai-auto" title="AI 说完自动继续聆听">连续对话</button>
       </header>
       <div class="ai-stage">
         <canvas class="orb" id="ai-orb" aria-hidden="true"></canvas>
@@ -319,8 +320,9 @@
       </label>
       <label class="field">
         区域 Region
-        <input type="text" id="set-azure-region" placeholder="如 eastasia / southeastasia" />
+        <input type="text" id="set-azure-region" placeholder="在美国用 eastus / westus，在国内用 eastasia" />
       </label>
+      <p class="hint">选离你最近的区域能明显降低语音延迟：美东 eastus、美西 westus、香港 eastasia、新加坡 southeastasia。</p>
       <label class="field">
         音色
         <select id="set-azure-voice">
@@ -337,17 +339,17 @@
     </div>
   </div>
 
-  <script src="js/storage.js?v=29"></script>
-  <script src="js/lessons.js?v=29"></script>
-  <script src="js/azure.js?v=29"></script>
-  <script src="js/speech.js?v=29"></script>
-  <script src="js/orb.js?v=29"></script>
-  <script src="js/practice.js?v=29"></script>
-  <script src="js/import.js?v=29"></script>
-  <script src="js/ai.js?v=29"></script>
-  <script src="js/video.js?v=29"></script>
-  <script src="js/translate.js?v=29"></script>
-  <script src="js/vocab.js?v=29"></script>
-  <script src="js/app.js?v=29"></script>
+  <script src="js/storage.js?v=30"></script>
+  <script src="js/lessons.js?v=30"></script>
+  <script src="js/azure.js?v=30"></script>
+  <script src="js/speech.js?v=30"></script>
+  <script src="js/orb.js?v=30"></script>
+  <script src="js/practice.js?v=30"></script>
+  <script src="js/import.js?v=30"></script>
+  <script src="js/ai.js?v=30"></script>
+  <script src="js/video.js?v=30"></script>
+  <script src="js/translate.js?v=30"></script>
+  <script src="js/vocab.js?v=30"></script>
+  <script src="js/app.js?v=30"></script>
 </body>
 </html>
