@@ -61,7 +61,6 @@ const Vocab = {
   render() {
     const list = this.list();
     document.getElementById('vocab-count').textContent = list.length;
-    document.getElementById('vocab-streak').textContent = this.streak();
     const el = document.getElementById('vocab-list');
     if (!list.length) {
       el.innerHTML = '<p class="hint">还没有生词。在上面输入单词或短语添加，会自动翻译。</p>';
@@ -145,3 +144,7 @@ const Vocab = {
     return (rec.last === today || rec.last === yest) ? (rec.streak || 0) : 0;
   },
 };
+
+// Top-level `const` in classic scripts does not become a window property;
+// attach explicitly so cross-module `window.Vocab` checks work.
+window.Vocab = Vocab;

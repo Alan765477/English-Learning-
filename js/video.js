@@ -179,3 +179,7 @@ const Video = {
     });
   },
 };
+
+// Top-level `const` in classic scripts does not become a window property;
+// attach explicitly so cross-module `window.Video` checks work.
+window.Video = Video;

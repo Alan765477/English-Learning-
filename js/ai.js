@@ -32,9 +32,21 @@ Rules:
     document.querySelectorAll('.topic.chip').forEach(btn => {
       btn.onclick = () => this.send(btn.dataset.topic);
     });
+    document.getElementById('ai-setup').onclick = () => { if (window.Sheet) Sheet.open('sheet-ai'); };
+    this.updateSetup();
   },
 
   configured() { return !!Store.get('apiKey'); },
+
+  // First-run guidance: until an API key is saved, the screen shows a single
+  // "connect" button instead of exposing the settings form up front.
+  updateSetup() {
+    const ok = this.configured();
+    document.getElementById('ai-setup').classList.toggle('hidden', ok);
+    document.getElementById('ai-topics').classList.toggle('hidden', !ok || this.history.length > 0);
+    if (!ok) document.getElementById('ai-state').textContent = '先连接 AI 外教，就能开口对话';
+    else if (this.state === 'idle' && !this.history.length) document.getElementById('ai-state').textContent = '点麦克风，开口说英语';
+  },
 
   setState(s, msg) {
     this.state = s;
@@ -42,14 +54,19 @@ Rules:
     document.getElementById('ai-talk').classList.toggle('listening', s === 'listening');
   },
 
-  // Orb pulse level (0..1) driven by the current state.
+  // Orb state + pulse level (0..1). Listening uses the real microphone level
+  // when MicLevel is running (non-iOS); otherwise a synthetic pulse.
+  orbState() { return this.state; },
   orbLevel() {
     if (this.state === 'speaking') {
       const lv = (window.Azure && Azure.levels) ? Azure.levels(6) : null;
       if (lv) { let s = 0; for (const v of lv) s += v; const a = s / lv.length; if (a > 0.02) return Math.min(1, a * 1.9); }
       return 0.35 + 0.32 * Math.abs(Math.sin(performance.now() / 170)); // synthetic pulse
     }
-    if (this.state === 'listening') return 0.18 + 0.16 * Math.abs(Math.sin(performance.now() / 320));
+    if (this.state === 'listening') {
+      if (window.MicLevel && MicLevel.active) return MicLevel.level();
+      return 0.18 + 0.16 * Math.abs(Math.sin(performance.now() / 320));
+    }
     if (this.state === 'thinking') return 0.1 + 0.08 * Math.abs(Math.sin(performance.now() / 220));
     return 0;
   },
@@ -61,20 +78,24 @@ Rules:
   },
 
   async listen() {
-    if (!this.configured()) { this.warn('请先在「设置」填入 API Key 才能对话。'); return; }
+    if (!this.configured()) { if (window.Sheet) Sheet.open('sheet-ai'); return; }
     if (!Speech.recognitionSupported()) {
-      this.warn('此浏览器不支持语音输入，点 ⌨️ 改用打字（建议用 Safari）。');
+      this.warn('此浏览器不支持语音输入，点键盘图标改用打字（建议用 Safari）。');
       return;
     }
     Speech.stop();
     this.warn('');
-    this.setState('listening', '🎧 聆听中…（说完停顿一下即可）');
+    if (window.haptic) haptic(10);
+    this.setState('listening', '聆听中…（说完停顿一下即可）');
+    if (window.MicLevel) MicLevel.start(); // non-iOS: the orb follows your voice
     try {
       const text = await Speech.recognizeOnce();
       if (text) this.send(text);
       else this.setState('idle', '没听清，点麦克风再说一次');
     } catch (e) {
       this.setState('idle', '没听清，点麦克风再说一次');
+    } finally {
+      if (window.MicLevel) MicLevel.stop();
     }
   },
 
@@ -88,7 +109,7 @@ Rules:
 
   async send(text) {
     if (this.busy) return;
-    if (!this.configured()) { this.warn('请先在「设置」填入 API Key 才能对话。'); return; }
+    if (!this.configured()) { if (window.Sheet) Sheet.open('sheet-ai'); return; }
     this.warn('');
     document.getElementById('ai-topics').classList.add('hidden');
     document.getElementById('ai-sub-user').textContent = '🗣 ' + text;
@@ -97,7 +118,7 @@ Rules:
     this.history.push({ role: 'user', text });
 
     this.busy = true;
-    this.setState('thinking', '💭 思考中…');
+    this.setState('thinking', '思考中…');
     try {
       const reply = await this.callProvider(text);
       this.history.push({ role: 'assistant', text: reply });
@@ -206,3 +227,7 @@ Rules:
     return (data.content || []).map(c => c.text || '').join('').trim();
   },
 };
+
+// Top-level `const` in classic scripts does not become a window property;
+// attach explicitly so cross-module `window.AI` checks work.
+window.AI = AI;
