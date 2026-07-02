@@ -98,6 +98,11 @@
   <button class="chip" data-source="mic">🎤 麦克风</button>
 </div>
 
+<div class="chips" id="ti-dir">
+  <button class="chip on" data-dir="en2zh">英语→中文 听对方</button>
+  <button class="chip" data-dir="zh2en">中文→英语 我来说</button>
+</div>
+
 <div id="ti-scroll"><div id="ti-list"></div></div>
 
 <div id="ti-interim">
@@ -186,20 +191,24 @@ const Store = {
 // without Azure). Called directly from the browser — no backend.
 const AI = {
   DEFAULTS: { claude: 'claude-haiku-4-5-20251001', deepseek: 'deepseek-chat' },
-  SYSTEM: 'You are a translation engine. Translate the English text to natural, concise Simplified Chinese. Output ONLY the translation, nothing else.',
+  SYSTEMS: {
+    en2zh: 'You are a translation engine. Translate the English text to natural, concise Simplified Chinese. Output ONLY the translation, nothing else.',
+    zh2en: 'You are a translation engine. Translate the Chinese text to natural, concise English. Output ONLY the translation, nothing else.',
+  },
 
   configured() { return !!Store.get('apiKey'); },
 
-  async translate(text) {
+  async translate(text, dir) {
     const provider = Store.get('provider');
     const key = Store.get('apiKey');
     if (!key) throw new Error('no-key');
+    const sys = this.SYSTEMS[dir] || this.SYSTEMS.en2zh;
     if (provider === 'deepseek') {
       const res = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'Authorization': 'Bearer ' + key },
         body: JSON.stringify({ model: this.DEFAULTS.deepseek, max_tokens: 200, messages: [
-          { role: 'system', content: this.SYSTEM }, { role: 'user', content: text },
+          { role: 'system', content: sys }, { role: 'user', content: text },
         ] }),
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -211,7 +220,7 @@ const AI = {
         'content-type': 'application/json', 'x-api-key': key,
         'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true',
       },
-      body: JSON.stringify({ model: this.DEFAULTS.claude, max_tokens: 200, system: this.SYSTEM, messages: [{ role: 'user', content: text }] }),
+      body: JSON.stringify({ model: this.DEFAULTS.claude, max_tokens: 200, system: sys, messages: [{ role: 'user', content: text }] }),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
@@ -239,6 +248,7 @@ function loadSpeechSDK() {
 const TeamsInterp = {
   active: false,
   source: 'system',   // 'system' | 'mic'
+  dir: 'en2zh',       // 'en2zh' (listen to English) | 'zh2en' (speak Chinese)
   rec: null,          // Azure TranslationRecognizer OR browser SpeechRecognition
   engine: null,       // 'azure' | 'webspeech'
   stream: null,       // display-capture stream (system mode)
@@ -276,6 +286,22 @@ const TeamsInterp = {
       if (sys) sys.classList.add('on');
     }
 
+    document.querySelectorAll('#ti-dir .chip').forEach(btn => {
+      btn.onclick = () => {
+        if (this.active) this.stop();
+        this.dir = btn.dataset.dir;
+        document.querySelectorAll('#ti-dir .chip').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        // Speaking Chinese is almost always done into the microphone.
+        if (this.dir === 'zh2en' && this.source === 'system') {
+          const mic = document.querySelector('#ti-source [data-source="mic"]');
+          if (mic) mic.click();
+          return;
+        }
+        this.hint();
+      };
+    });
+
     document.getElementById('ti-toggle').onclick = () => this.toggle();
     document.getElementById('ti-clear').onclick = () => {
       document.getElementById('ti-list').innerHTML = '';
@@ -304,17 +330,19 @@ const TeamsInterp = {
   // Contextual guidance shown before starting.
   hint() {
     if (this.active) return;
+    const zh2en = this.dir === 'zh2en';
     let msg;
-    if (this.source === 'system') {
+    if (!this.azureConfigured() && !AI.configured()) {
+      msg = '先点右上 ⚙️ 填写 Azure Key（推荐）或 AI Key';
+    } else if (this.source === 'system') {
       msg = this.azureConfigured()
-        ? '点开始后选「整个屏幕」或 Teams 所在标签页，并勾选「共享音频」'
+        ? (zh2en ? '将把会议声音里的中文翻成英文。' : '')
+          + '点开始后选「整个屏幕」或 Teams 所在标签页，并勾选「共享音频」'
         : '系统声音模式需要 Azure Speech Key（免费额度每月 5 小时）→ 点右上 ⚙️ 填写';
+    } else if (zh2en) {
+      msg = '你说中文，实时出英文字幕（可以照着读给对方听）';
     } else {
-      msg = this.azureConfigured()
-        ? '麦克风模式：外放开会或现场会议时使用（戴耳机时收不到对方声音）'
-        : AI.configured()
-          ? '麦克风模式（浏览器识别）：外放开会或现场会议时使用'
-          : '先点右上 ⚙️ 填写 Azure Key（推荐）或 AI Key';
+      msg = '麦克风模式：外放开会或现场会议时使用（戴耳机时收不到对方声音）';
     }
     this.status(msg);
   },
@@ -368,8 +396,10 @@ const TeamsInterp = {
     const cfg = SDK.SpeechTranslationConfig.fromSubscription(
       (Store.get('azureKey') || '').replace(/\s+/g, ''),
       (Store.get('azureRegion') || '').trim().toLowerCase());
-    cfg.speechRecognitionLanguage = 'en-US';
-    cfg.addTargetLanguage('zh-Hans');
+    const zh2en = this.dir === 'zh2en';
+    cfg.speechRecognitionLanguage = zh2en ? 'zh-CN' : 'en-US';
+    const target = zh2en ? 'en' : 'zh-Hans';
+    cfg.addTargetLanguage(target);
     // Finalize a sentence ~0.6s after the speaker pauses (default ~2s lags).
     try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '600'); } catch {}
     const audio = stream
@@ -378,15 +408,15 @@ const TeamsInterp = {
     const rec = new SDK.TranslationRecognizer(cfg, audio);
     this.engine = 'azure';
     this.rec = rec;
-    const zhOf = (r) => { try { return r.translations.get('zh-Hans') || ''; } catch { return ''; } };
+    const outOf = (r) => { try { return r.translations.get(target) || ''; } catch { return ''; } };
     rec.recognizing = (s, e) => {
-      if (e.result && e.result.text) this.interim(e.result.text, zhOf(e.result));
+      if (e.result && e.result.text) this.interim(e.result.text, outOf(e.result));
     };
     rec.recognized = (s, e) => {
       const r = e.result;
       if (r && r.reason === SDK.ResultReason.TranslatedSpeech && r.text.trim()) {
         this.interim('', '');
-        this.addLine(r.text.trim(), zhOf(r).trim());
+        this.addLine(r.text.trim(), outOf(r).trim());
       }
     };
     rec.canceled = (s, e) => {
@@ -406,7 +436,7 @@ const TeamsInterp = {
   startWebSpeech() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
-    rec.lang = 'en-US';
+    rec.lang = this.dir === 'zh2en' ? 'zh-CN' : 'en-US';
     rec.continuous = false;
     rec.interimResults = true;
     rec.onresult = (e) => {
@@ -499,7 +529,7 @@ const TeamsInterp = {
     list.appendChild(row);
     this.trimAndScroll(list);
     try {
-      const zh = await AI.translate(en);
+      const zh = await AI.translate(en, this.dir);
       row.querySelector('.ti-zh').textContent = zh;
     } catch {
       row.querySelector('.ti-zh').textContent = '（翻译失败，检查 Key/网络）';
