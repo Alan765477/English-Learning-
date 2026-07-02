@@ -69,6 +69,13 @@
   }
   .chip.on { background: rgba(10,132,255,.22); color: var(--accent); font-weight: 600; }
   .chip.rec-on { background: rgba(255,69,58,.2); color: var(--red); font-weight: 600; }
+  .langbar { display: flex; align-items: center; gap: 6px; }
+  .langbar .lb { font-size: 12px; color: var(--text2); flex-shrink: 0; }
+  .langbar select {
+    flex: 1; min-width: 0; border: none; background: var(--surface); color: var(--text);
+    border-radius: 8px; padding: 7px 8px; font-size: 13px; outline: none;
+    -webkit-appearance: none; appearance: none; text-align: center;
+  }
 
   /* ---- Transcript history (top, dimmed) ---- */
   #ti-scroll {
@@ -162,9 +169,15 @@
 
 <div class="controls">
   <div class="seg" id="ti-dir">
-    <button class="on" data-dir="en2zh">听对方 英→中</button>
-    <button data-dir="zh2en">我来说 中→英</button>
+    <button class="on" data-dir="them">听对方</button>
+    <button data-dir="me">我来说</button>
     <button data-dir="duplex">双向对话</button>
+  </div>
+  <div class="langbar">
+    <span class="lb">对方说</span>
+    <select id="lang-them"></select>
+    <span class="lb">我说</span>
+    <select id="lang-me"></select>
   </div>
   <div class="seg" id="ti-source">
     <button class="on" data-source="system">🔊 会议声音</button>
@@ -241,11 +254,14 @@
 // Teams meeting live translator — fully self-contained (no other scripts).
 //
 // Directions:
-//   en2zh  — listen to English (meeting audio or mic), Chinese captions
-//   zh2en  — speak Chinese into the mic, English captions (read them out,
+//   them   — listen to the other side (meeting audio or mic), captions in
+//            YOUR language
+//   me     — speak into the mic, captions in THEIR language (read them out,
 //            or let TTS + a virtual cable speak them into the meeting)
-//   duplex — BOTH at once: meeting audio en→zh labeled 「对方」 and your mic
-//            zh→en labeled 「我」. Azure + screen-audio capture required.
+//   duplex — BOTH at once, rows labeled 「对方」/「我」. Azure + screen-audio
+//            capture required.
+// Both sides' languages are user-selectable (LANGS); recognition language,
+// translation target, and TTS voice all derive from those two choices.
 //
 // Extras: per-sentence voice output (TTS), meeting audio recording
 // (mic + meeting mixed into one downloadable file), and AI meeting minutes
@@ -255,7 +271,7 @@
 // Settings — localStorage only; keys never leave this browser.
 const Store = {
   KEY: 'tlt_settings_v1',
-  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '' },
+  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '', langThem: 'en-US', langMe: 'zh-CN' },
   _cache: null,
   load() {
     if (this._cache) return this._cache;
@@ -277,13 +293,23 @@ const Store = {
 };
 
 // ---------------------------------------------------------------------------
+// Supported languages. `tgt` is Azure's translation-target code, `voice` the
+// neural TTS voice, `eng` the English name used in LLM translation prompts.
+const LANGS = {
+  'zh-CN': { name: '中文',     eng: 'Simplified Chinese', tgt: 'zh-Hans', voice: 'zh-CN-XiaoxiaoNeural' },
+  'en-US': { name: 'English',  eng: 'English',            tgt: 'en',      voice: 'en-US-AvaMultilingualNeural' },
+  'ja-JP': { name: '日本語',   eng: 'Japanese',           tgt: 'ja',      voice: 'ja-JP-NanamiNeural' },
+  'ko-KR': { name: '한국어',   eng: 'Korean',             tgt: 'ko',      voice: 'ko-KR-SunHiNeural' },
+  'es-ES': { name: 'Español',  eng: 'Spanish',            tgt: 'es',      voice: 'es-ES-ElviraNeural' },
+  'fr-FR': { name: 'Français', eng: 'French',             tgt: 'fr',      voice: 'fr-FR-DeniseNeural' },
+  'de-DE': { name: 'Deutsch',  eng: 'German',             tgt: 'de',      voice: 'de-DE-KatjaNeural' },
+  'ru-RU': { name: 'Русский',  eng: 'Russian',            tgt: 'ru',      voice: 'ru-RU-SvetlanaNeural' },
+};
+
+// ---------------------------------------------------------------------------
 // LLM calls (translation fallback + meeting minutes). Browser-direct, no backend.
 const AI = {
   DEFAULTS: { claude: 'claude-haiku-4-5-20251001', deepseek: 'deepseek-chat' },
-  SYSTEMS: {
-    en2zh: 'You are a translation engine. Translate the English text to natural, concise Simplified Chinese. Output ONLY the translation, nothing else.',
-    zh2en: 'You are a translation engine. Translate the Chinese text to natural, concise English. Output ONLY the translation, nothing else.',
-  },
   MINUTES_SYS: '你是会议纪要助手。根据提供的会议字幕（可能中英混合、有识别噪音），输出一份简体中文会议纪要，格式：\n## 会议主题\n## 讨论要点\n（分条列出）\n## 达成的决定\n## 待办事项\n（谁、做什么、何时，如果字幕里有提到）\n只输出纪要本身，不要客套话。字幕里信息不足的部分写"未提及"。',
 
   configured() { return !!Store.get('apiKey'); },
@@ -316,8 +342,11 @@ const AI = {
     return (data.content || []).map(c => c.text || '').join('').trim();
   },
 
-  translate(text, dir) {
-    return this._oneShot(this.SYSTEMS[dir] || this.SYSTEMS.en2zh, text, 200);
+  translate(text, fromLoc, toLoc) {
+    const from = (LANGS[fromLoc] || LANGS['en-US']).eng;
+    const to = (LANGS[toLoc] || LANGS['zh-CN']).eng;
+    const sys = `You are a translation engine. Translate the ${from} text to natural, concise ${to}. Output ONLY the translation, nothing else.`;
+    return this._oneShot(sys, text, 200);
   },
 
   minutes(transcriptText) {
@@ -334,7 +363,6 @@ const TTS = {
   enabled: false,
   queue: Promise.resolve(),
   el: null,
-  VOICES: { en: 'en-US-AvaMultilingualNeural', zh: 'zh-CN-XiaoxiaoNeural' },
 
   _audio() {
     if (!this.el) this.el = new Audio();
@@ -369,7 +397,7 @@ const TTS = {
   async _azure(text, lang) {
     const key = (Store.get('azureKey') || '').replace(/\s+/g, '');
     const region = (Store.get('azureRegion') || '').trim().toLowerCase();
-    const voice = this.VOICES[lang] || this.VOICES.en;
+    const voice = (LANGS[lang] || LANGS['en-US']).voice;
     const ssml = `<speak version='1.0' xml:lang='en-US'><voice name='${voice}'>` +
       `${this._escape(text)}</voice></speak>`;
     const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
@@ -398,8 +426,8 @@ const TTS = {
     return new Promise((resolve) => {
       if (!('speechSynthesis' in window)) { resolve(); return; }
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = lang === 'en' ? 'en-US' : 'zh-CN';
-      const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith(u.lang.slice(0, 2)));
+      u.lang = LANGS[lang] ? lang : 'en-US';
+      const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith(u.lang.slice(0, 2).toLowerCase()));
       if (v) u.voice = v;
       u.onend = resolve;
       u.onerror = resolve;
@@ -534,7 +562,7 @@ function loadSpeechSDK() {
 // ---------------------------------------------------------------------------
 const TeamsInterp = {
   active: false,
-  dir: 'en2zh',       // 'en2zh' | 'zh2en' | 'duplex'
+  dir: 'them',        // 'them' (listen) | 'me' (speak) | 'duplex' (both)
   source: 'system',   // 'system' | 'mic' (ignored in duplex: it uses both)
   recs: [],           // running recognizers (browser SR or Azure)
   stream: null,       // captured meeting-audio stream
@@ -559,10 +587,28 @@ const TeamsInterp = {
         this.dir = btn.dataset.dir;
         document.querySelectorAll('#ti-dir button').forEach(b => b.classList.remove('on'));
         btn.classList.add('on');
-        // Speaking Chinese happens into the mic; duplex fixes its own sources.
-        if (this.dir === 'zh2en') this.setSource('mic');
-        if (this.dir === 'en2zh') this.setSource(displayOK ? 'system' : 'mic');
+        // "我来说" happens into the mic; duplex fixes its own sources.
+        if (this.dir === 'me') this.setSource('mic');
+        if (this.dir === 'them') this.setSource(displayOK ? 'system' : 'mic');
         document.getElementById('ti-source').classList.toggle('hidden', this.dir === 'duplex');
+        this.hint();
+      };
+    });
+
+    // Language pickers: what THEY speak and what I speak. Everything else
+    // (recognition language, translation target, TTS voice) derives from
+    // these two choices.
+    [['lang-them', 'langThem'], ['lang-me', 'langMe']].forEach(([id, key]) => {
+      const sel = document.getElementById(id);
+      Object.entries(LANGS).forEach(([loc, l]) => {
+        const o = document.createElement('option');
+        o.value = loc; o.textContent = l.name;
+        sel.appendChild(o);
+      });
+      sel.value = Store.get(key) || (key === 'langThem' ? 'en-US' : 'zh-CN');
+      sel.onchange = () => {
+        if (this.active) this.stop();
+        Store.setAll({ [key]: sel.value });
         this.hint();
       };
     });
@@ -642,24 +688,36 @@ const TeamsInterp = {
   azureConfigured() { return !!(Store.get('azureKey') && Store.get('azureRegion')); },
   webSpeechSupported() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); },
 
+  // Current language selections and the derived translation pair.
+  langThem() { return Store.get('langThem') || 'en-US'; },
+  langMe() { return Store.get('langMe') || 'zh-CN'; },
+  // For single-channel modes: what we listen to and what we output.
+  pair() {
+    const them = this.langThem(), me = this.langMe();
+    return this.dir === 'me' ? { from: me, out: them } : { from: them, out: me };
+  },
+
   // Contextual guidance shown before starting.
   hint() {
     if (this.active) return;
+    const nThem = LANGS[this.langThem()].name, nMe = LANGS[this.langMe()].name;
     let msg;
     if (!this.azureConfigured() && !AI.configured()) {
       msg = '先点右上 ⚙️ 填写 Azure Key（推荐）或 AI Key';
+    } else if (this.langThem() === this.langMe()) {
+      msg = '两边语言相同，请把「对方说 / 我说」设成不同语言';
     } else if (this.dir === 'duplex') {
       msg = this.azureConfigured()
-        ? '双向：会议声音→中文字幕（对方），你的麦克风→英文字幕（我）。点开始后共享屏幕/标签页并勾选「共享音频」'
+        ? `双向：会议声音（${nThem}→${nMe}，标「对方」）+ 麦克风（${nMe}→${nThem}，标「我」）。点开始后共享屏幕/标签页并勾选「共享音频」`
         : '双向对话需要 Azure Speech Key → 点右上 ⚙️ 填写';
     } else if (this.source === 'system') {
       msg = this.azureConfigured()
-        ? '点开始后选「整个屏幕」或 Teams 所在标签页，并勾选「共享音频」'
+        ? `听${nThem}出${nMe}字幕。点开始后选「整个屏幕」或 Teams 所在标签页，并勾选「共享音频」`
         : '会议声音模式需要 Azure Speech Key（免费额度每月 5 小时）→ 点右上 ⚙️ 填写';
-    } else if (this.dir === 'zh2en') {
-      msg = '你说中文，实时出英文字幕（可照着读，或开启 🔈 朗读）';
+    } else if (this.dir === 'me') {
+      msg = `你说${nMe}，实时出${nThem}字幕（可照着读，或开启 🔈 朗读）`;
     } else {
-      msg = '麦克风模式：外放开会或现场会议时使用（戴耳机时收不到对方声音）';
+      msg = `麦克风听${nThem}出${nMe}字幕：外放开会或现场会议时使用（戴耳机收不到对方声音）`;
     }
     this.status(msg);
   },
@@ -683,20 +741,21 @@ const TeamsInterp = {
   },
 
   async start() {
+    if (this.langThem() === this.langMe()) { this.status('两边语言相同，请把「对方说 / 我说」设成不同语言'); return; }
     try {
       if (this.dir === 'duplex') {
         if (!this.azureConfigured()) { this.openSettings(); this.status('双向对话需要 Azure Speech Key'); return; }
         const meeting = await this.captureMeetingAudio();
-        await this.startAzure({ stream: meeting, from: 'en-US', to: 'zh-Hans', who: 'them' });
-        await this.startAzure({ stream: null, from: 'zh-CN', to: 'en', who: 'me' });
+        await this.startAzure({ stream: meeting, from: this.langThem(), outLoc: this.langMe(), who: 'them' });
+        await this.startAzure({ stream: null, from: this.langMe(), outLoc: this.langThem(), who: 'me' });
       } else if (this.source === 'system') {
         if (!this.azureConfigured()) { this.openSettings(); this.status('会议声音模式需要 Azure Speech Key'); return; }
         const meeting = await this.captureMeetingAudio();
-        const zh2en = this.dir === 'zh2en';
-        await this.startAzure({ stream: meeting, from: zh2en ? 'zh-CN' : 'en-US', to: zh2en ? 'en' : 'zh-Hans', who: '' });
+        const p = this.pair();
+        await this.startAzure({ stream: meeting, from: p.from, outLoc: p.out, who: '' });
       } else if (this.azureConfigured()) {
-        const zh2en = this.dir === 'zh2en';
-        await this.startAzure({ stream: null, from: zh2en ? 'zh-CN' : 'en-US', to: zh2en ? 'en' : 'zh-Hans', who: '' });
+        const p = this.pair();
+        await this.startAzure({ stream: null, from: p.from, outLoc: p.out, who: '' });
       } else if (this.webSpeechSupported() && AI.configured()) {
         this.startWebSpeech();
       } else {
@@ -719,9 +778,10 @@ const TeamsInterp = {
   },
 
   // One Azure streaming translation channel. duplex runs two of these.
-  async startAzure({ stream, from, to, who }) {
+  async startAzure({ stream, from, outLoc, who }) {
     await loadSpeechSDK();
     const SDK = window.SpeechSDK;
+    const to = LANGS[outLoc].tgt;
     const cfg = SDK.SpeechTranslationConfig.fromSubscription(
       (Store.get('azureKey') || '').replace(/\s+/g, ''),
       (Store.get('azureRegion') || '').trim().toLowerCase());
@@ -743,7 +803,7 @@ const TeamsInterp = {
       const r = e.result;
       if (r && r.reason === SDK.ResultReason.TranslatedSpeech && r.text.trim()) {
         this.focusIdle('正在听…');
-        this.addLine(r.text.trim(), outOf(r).trim(), who);
+        this.addLine(r.text.trim(), outOf(r).trim(), who, outLoc);
       }
     };
     rec.canceled = (s, e) => {
@@ -763,7 +823,7 @@ const TeamsInterp = {
   startWebSpeech() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
-    rec.lang = this.dir === 'zh2en' ? 'zh-CN' : 'en-US';
+    rec.lang = this.pair().from;
     rec.continuous = false;
     rec.interimResults = true;
     rec.onresult = (e) => {
@@ -865,20 +925,20 @@ const TeamsInterp = {
     return row;
   },
 
-  addLine(src, out, who) {
+  addLine(src, out, who, outLoc) {
     this._row(src, out || '…', who);
     this.transcript.push({ who, src, out });
-    const lang = (who === 'me' || this.dir === 'zh2en') ? 'en' : 'zh';
-    TTS.speak(out, lang);
+    TTS.speak(out, outLoc || this.pair().out);
   },
 
   async addLineAI(src) {
     const row = this._row(src, '翻译中…', '');
+    const p = this.pair();
     try {
-      const out = await AI.translate(src, this.dir);
+      const out = await AI.translate(src, p.from, p.out);
       row.querySelector('.ti-zh').textContent = out;
       this.transcript.push({ who: '', src, out });
-      TTS.speak(out, this.dir === 'zh2en' ? 'en' : 'zh');
+      TTS.speak(out, p.out);
     } catch {
       row.querySelector('.ti-zh').textContent = '（翻译失败，检查 Key/网络）';
     }
