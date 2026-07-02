@@ -10,6 +10,7 @@ const Store = {
     azureRegion: '',
     azureVoice: 'en-US-AvaMultilingualNeural',
     listenRate: 1,
+    autoTalk: true,
     show: { en: false, ipa: false, zh: false },
   },
   _cache: null,

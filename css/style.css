@@ -270,6 +270,7 @@ html, body {
 @keyframes pulse { 50% { opacity: .55; } }
 
 /* AI voice partner */
+.ai-header { display: flex; align-items: center; justify-content: space-between; }
 #view-ai { display: none; flex-direction: column; }
 #view-ai:not(.hidden) { display: flex; }
 .ai-stage {
