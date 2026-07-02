@@ -146,7 +146,7 @@ const Practice = {
         enEl.textContent = '••• ••• •••';
         enEl.classList.add('blind');
       }
-      ipaEl.textContent = s.ipa;
+      ipaEl.textContent = s.ipa || '';
       ipaEl.classList.toggle('hidden', reveal < 2);
       zhEl.textContent = s.zh;
       zhEl.classList.toggle('hidden', reveal < 2);
