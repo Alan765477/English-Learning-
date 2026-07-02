@@ -215,4 +215,36 @@ const LESSONS = [
       { en: "Take care! See you around.", ipa: "/teɪk ker siː juː əˈraʊnd/", zh: "保重！回头见。（告别的万能句）" },
     ],
   },
+
+  // ---- 短文精听：VOA 慢速风格的原创短文，练成段听力 ----
+  {
+    id: 'passage-tipping',
+    title: '短文精听 · 美国的小费文化',
+    level: '短文',
+    sentences: [
+      { en: "Tipping is a big part of everyday life in the United States.", ipa: "/ˈtɪpɪŋ ɪz ə bɪɡ pɑːrt əv ˈevrideɪ laɪf ɪn ðə juːˈnaɪtɪd steɪts/", zh: "小费是美国日常生活的重要组成部分。" },
+      { en: "At restaurants, people usually tip fifteen to twenty percent of the bill.", ipa: "/æt ˈrestərɑːnts ˈpiːpəl ˈjuːʒuəli tɪp ˈfɪftiːn tə ˈtwenti pərˈsent əv ðə bɪl/", zh: "在餐厅，人们通常按账单的 15% 到 20% 给小费。" },
+      { en: "Servers earn low base pay, so tips make up most of their income.", ipa: "/ˈsɜːrvərz ɜːrn loʊ beɪs peɪ soʊ tɪps meɪk ʌp moʊst əv ðer ˈɪnkʌm/", zh: "服务员底薪很低，小费占了收入的大头。" },
+      { en: "For coffee or takeout, tipping is nice but not expected.", ipa: "/fɔːr ˈkɔːfi ɔːr ˈteɪkaʊt ˈtɪpɪŋ ɪz naɪs bʌt nɑːt ɪkˈspektɪd/", zh: "买咖啡或外带时，给小费是好意，但不是必须。" },
+      { en: "Many payment screens now ask for a tip before you pay.", ipa: "/ˈmeni ˈpeɪmənt skriːnz naʊ æsk fɔːr ə tɪp bɪˈfɔːr juː peɪ/", zh: "现在很多支付屏幕会在付款前请你选小费。" },
+      { en: "It is okay to press the no-tip button for counter service.", ipa: "/ɪt ɪz ˌoʊˈkeɪ tə pres ðə noʊ tɪp ˈbʌtən fɔːr ˈkaʊntər ˈsɜːrvɪs/", zh: "柜台点单时选择“不给小费”完全没问题。" },
+      { en: "Taxi drivers, hair stylists, and delivery workers also expect tips.", ipa: "/ˈtæksi ˈdraɪvərz her ˈstaɪlɪsts ænd dɪˈlɪvəri ˈwɜːrkərz ˈɔːlsoʊ ɪkˈspekt tɪps/", zh: "出租车司机、理发师和外卖员也期待小费。" },
+      { en: "When in doubt, twenty percent is always a safe choice.", ipa: "/wen ɪn daʊt ˈtwenti pərˈsent ɪz ˈɔːlweɪz ə seɪf tʃɔɪs/", zh: "拿不准的时候，给 20% 总是稳妥的。" },
+    ],
+  },
+  {
+    id: 'passage-garage-sale',
+    title: '短文精听 · 车库旧货集市',
+    level: '短文',
+    sentences: [
+      { en: "On weekend mornings, many American families hold garage sales.", ipa: "/ɒn ˈwiːkend ˈmɔːrnɪŋz ˈmeni əˈmerɪkən ˈfæməliz hoʊld ɡəˈrɑːʒ seɪlz/", zh: "周末的早晨，很多美国家庭会办车库旧货出售。" },
+      { en: "They sell used furniture, books, toys, and clothes in front of their homes.", ipa: "/ðeɪ sel juːzd ˈfɜːrnɪtʃər bʊks tɔɪz ænd kloʊðz ɪn frʌnt əv ðer hoʊmz/", zh: "他们在自家门前出售旧家具、书、玩具和衣服。" },
+      { en: "Prices are low, and buyers love to bargain.", ipa: "/ˈpraɪsɪz ɑːr loʊ ænd ˈbaɪərz lʌv tə ˈbɑːrɡən/", zh: "价格很低，买家也喜欢讨价还价。" },
+      { en: "You might find a good lamp for just one dollar.", ipa: "/juː maɪt faɪnd ə ɡʊd læmp fɔːr dʒʌst wʌn ˈdɑːlər/", zh: "你可能一美元就能淘到一盏不错的台灯。" },
+      { en: "Neighbors stop by to chat as much as to shop.", ipa: "/ˈneɪbərz stɑːp baɪ tə tʃæt æz mʌtʃ æz tə ʃɑːp/", zh: "邻居们过来聊天的成分不比买东西少。" },
+      { en: "Everything is cash only, so bring small bills.", ipa: "/ˈevriθɪŋ ɪz kæʃ ˈoʊnli soʊ brɪŋ smɔːl bɪlz/", zh: "一律只收现金，记得带零钱。" },
+      { en: "The best deals go to people who arrive early.", ipa: "/ðə best diːlz ɡoʊ tə ˈpiːpəl huː əˈraɪv ˈɜːrli/", zh: "最划算的货都归早到的人。" },
+      { en: "At the end of the day, leftovers are often given away for free.", ipa: "/æt ðə end əv ðə deɪ ˈleftoʊvərz ɑːr ˈɔːfən ˈɡɪvən əˈweɪ fɔːr friː/", zh: "到了傍晚，剩下的东西常常免费送人。" },
+    ],
+  },
 ];

@@ -350,19 +350,18 @@ Rules:
     return (data.choices?.[0]?.message?.content || '').trim();
   },
 
-  // One-shot translation to Chinese (used by the real-time interpreter).
-  async translate(text) {
+  // Generic one-shot call (system + single user message → text).
+  async _oneShot(sys, user, maxTokens) {
     const provider = Store.get('provider');
     const key = Store.get('apiKey');
     if (!key) throw new Error('no-key');
     const model = Store.get('model') || this.DEFAULTS[provider];
-    const sys = 'You are a translation engine. Translate the English text to natural, concise Simplified Chinese. Output ONLY the translation, nothing else.';
     if (provider === 'deepseek') {
       const res = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'Authorization': 'Bearer ' + key },
-        body: JSON.stringify({ model, max_tokens: 200, messages: [
-          { role: 'system', content: sys }, { role: 'user', content: text },
+        body: JSON.stringify({ model, max_tokens: maxTokens, messages: [
+          { role: 'system', content: sys }, { role: 'user', content: user },
         ] }),
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -374,11 +373,33 @@ Rules:
         'content-type': 'application/json', 'x-api-key': key,
         'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true',
       },
-      body: JSON.stringify({ model, max_tokens: 200, system: sys, messages: [{ role: 'user', content: text }] }),
+      body: JSON.stringify({ model, max_tokens: maxTokens, system: sys, messages: [{ role: 'user', content: user }] }),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     return (data.content || []).map(c => c.text || '').join('').trim();
+  },
+
+  // One-shot translation to Chinese (used by the real-time interpreter).
+  translate(text) {
+    return this._oneShot(
+      'You are a translation engine. Translate the English text to natural, concise Simplified Chinese. Output ONLY the translation, nothing else.',
+      text, 200);
+  },
+
+  // Batch-annotate sentences for the lesson importer:
+  // returns [{zh, ipa}] in the same order as the input.
+  async annotate(sentences) {
+    const sys =
+      'You are a JSON API for an English-learning app. For EACH input sentence produce: ' +
+      '"zh" — a natural, concise Simplified Chinese translation; ' +
+      '"ipa" — an approximate General-American IPA transcription of the whole sentence, wrapped in slashes. ' +
+      'Reply with ONLY a JSON array, one object {"zh","ipa"} per input sentence, in the same order. No markdown, no extra text.';
+    const raw = await this._oneShot(sys, JSON.stringify(sentences), 2400);
+    const m = raw.match(/\[[\s\S]*\]/);
+    const arr = JSON.parse(m ? m[0] : raw);
+    if (!Array.isArray(arr)) throw new Error('bad-json');
+    return arr;
   },
 };
 
