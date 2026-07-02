@@ -1,0 +1,46 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "990bed89-501a-4c93-9ed5-1f564ca1e42a",
+  "packageName": "com.alan.teamslivetranslator",
+  "developer": {
+    "name": "Alan",
+    "websiteUrl": "https://alan765477.github.io/teams-live-translator/",
+    "privacyUrl": "https://alan765477.github.io/teams-live-translator/",
+    "termsOfUseUrl": "https://alan765477.github.io/teams-live-translator/"
+  },
+  "name": {
+    "short": "实时翻译",
+    "full": "会议实时翻译 · Live Meeting Translator"
+  },
+  "description": {
+    "short": "开会时把英语发言实时翻译成中文字幕",
+    "full": "在 Teams 会议侧边栏显示实时中文字幕：捕获会议声音或麦克风，把英语发言边说边翻译成中文。API Key 只保存在本机浏览器，纯前端实现，无服务器。"
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#4F46E5",
+  "configurableTabs": [
+    {
+      "configurationUrl": "https://alan765477.github.io/teams-live-translator/config.html",
+      "canUpdateConfiguration": false,
+      "scopes": ["groupChat"],
+      "context": ["meetingSidePanel", "meetingChatTab", "meetingDetailsTab"]
+    }
+  ],
+  "staticTabs": [
+    {
+      "entityId": "live-translator-personal",
+      "name": "实时翻译",
+      "contentUrl": "https://alan765477.github.io/teams-live-translator/index.html",
+      "websiteUrl": "https://alan765477.github.io/teams-live-translator/index.html",
+      "scopes": ["personal"]
+    }
+  ],
+  "permissions": ["identity"],
+  "devicePermissions": ["media"],
+  "validDomains": ["alan765477.github.io"]
+}

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>会议实时翻译 · Live Translator</title>
+<link rel="icon" type="image/png" href="color.png">
+<style>
+  /* Self-contained dark caption theme — the Teams meeting side panel is dark,
+     and captions read best light-on-dark regardless of host theme. */
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #1a1a20; color: #f0f0f4;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .hidden { display: none !important; }
+
+  header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; flex-shrink: 0;
+  }
+  header h1 { font-size: 15px; font-weight: 600; flex: 1; }
+  .icon-btn {
+    background: none; border: none; color: #aaa; font-size: 17px;
+    cursor: pointer; padding: 4px 6px; border-radius: 8px;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,.08); color: #fff; }
+
+  .chips { display: flex; gap: 6px; padding: 0 12px 8px; flex-shrink: 0; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid rgba(255,255,255,.16); background: none; color: #ccc;
+    border-radius: 999px; padding: 5px 12px; font-size: 12.5px; cursor: pointer;
+  }
+  .chip.on { background: #4F46E5; border-color: #4F46E5; color: #fff; }
+
+  #ti-scroll {
+    flex: 1; overflow-y: auto; padding: 4px 12px;
+    display: flex; flex-direction: column;
+  }
+  #ti-list { margin-top: auto; }  /* captions stick to the bottom like real CC */
+  .ti-row { padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .ti-zh { color: #fff; line-height: 1.45; }
+  .ti-en { color: #9a9aa5; line-height: 1.35; margin-top: 2px; }
+  .cap-s .ti-zh { font-size: 15px; } .cap-s .ti-en { font-size: 11.5px; }
+  .cap-m .ti-zh { font-size: 18px; } .cap-m .ti-en { font-size: 12.5px; }
+  .cap-l .ti-zh { font-size: 23px; font-weight: 600; } .cap-l .ti-en { font-size: 13px; }
+
+  #ti-interim {
+    flex-shrink: 0; min-height: 20px; padding: 6px 12px;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+  #ti-interim-zh { color: #8b86f2; font-size: 15px; line-height: 1.4; }
+  #ti-interim-en { color: #77777f; font-size: 12px; font-style: italic; }
+
+  footer { flex-shrink: 0; padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); }
+  #ti-status { font-size: 12px; color: #9a9aa5; line-height: 1.45; min-height: 17px; margin-bottom: 8px; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn {
+    border: none; border-radius: 12px; padding: 12px; font-size: 15px;
+    cursor: pointer; font-weight: 600;
+  }
+  #ti-toggle { flex: 1; background: #4F46E5; color: #fff; }
+  #ti-toggle.recording { background: #dc3d43; }
+  .btn.ghost { background: rgba(255,255,255,.09); color: #ddd; flex: 0 0 auto; }
+
+  /* Settings drawer */
+  #ti-settings {
+    position: fixed; inset: 0; background: #1f1f27; z-index: 10;
+    padding: 16px; overflow-y: auto;
+  }
+  #ti-settings h2 { font-size: 16px; margin-bottom: 4px; }
+  #ti-settings .sub { font-size: 12px; color: #9a9aa5; line-height: 1.5; margin-bottom: 14px; }
+  #ti-settings label { display: block; font-size: 12.5px; color: #bbb; margin: 12px 0 4px; }
+  #ti-settings input, #ti-settings select {
+    width: 100%; padding: 10px; border-radius: 10px; font-size: 14px;
+    border: 1px solid rgba(255,255,255,.15); background: #14141a; color: #fff;
+  }
+  #ti-settings .group { margin-top: 18px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.08); }
+  #ti-settings .save-row { display: flex; gap: 8px; margin-top: 20px; }
+  #ti-set-save { flex: 1; background: #4F46E5; color: #fff; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🎧 会议实时翻译</h1>
+  <button id="ti-font" class="icon-btn" title="字号">Aa</button>
+  <button id="ti-clear" class="icon-btn" title="清空">🗑</button>
+  <button id="ti-gear" class="icon-btn" title="设置">⚙️</button>
+</header>
+
+<div class="chips" id="ti-source">
+  <button class="chip" data-source="system">🔊 会议声音（推荐）</button>
+  <button class="chip" data-source="mic">🎤 麦克风</button>
+</div>
+
+<div id="ti-scroll"><div id="ti-list"></div></div>
+
+<div id="ti-interim">
+  <div id="ti-interim-zh"></div>
+  <div id="ti-interim-en"></div>
+</div>
+
+<footer>
+  <div id="ti-status"></div>
+  <div class="btn-row">
+    <button id="ti-toggle" class="btn">▶ 开始翻译</button>
+  </div>
+</footer>
+
+<div id="ti-settings" class="hidden">
+  <h2>连接翻译服务</h2>
+  <p class="sub">Key 只保存在本机浏览器，不会上传。推荐 Azure：能直接翻译会议声音，且边说边出字幕（免费额度每月 5 小时）。</p>
+
+  <div class="group">
+    <label>Azure Speech Key（portal.azure.com → 创建「语音服务」资源）</label>
+    <input id="set-azure-key" type="password" placeholder="粘贴 Key">
+    <label>Azure 区域（如 eastasia、eastus）</label>
+    <input id="set-azure-region" placeholder="eastasia">
+  </div>
+
+  <div class="group">
+    <label>备选：AI 翻译（仅麦克风模式可用）</label>
+    <select id="set-provider">
+      <option value="claude">Claude</option>
+      <option value="deepseek">DeepSeek</option>
+    </select>
+    <label>API Key</label>
+    <input id="set-api-key" type="password" placeholder="sk-...">
+  </div>
+
+  <div class="save-row">
+    <button id="ti-set-save" class="btn">保存</button>
+    <button id="ti-set-close" class="btn ghost">取消</button>
+  </div>
+</div>
+
+<script src="https://res.cdn.office.net/teams-js/2.31.1/js/MicrosoftTeams.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
