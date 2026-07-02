@@ -32,7 +32,7 @@ const Interpreter = {
       return;
     }
     if (!AI.configured()) {
-      this.status('请先在「设置」填好 AI 的 API Key（翻译用它完成）。');
+      this.status('请先在「我的」里连接 AI 外教（翻译用它完成）。');
       return;
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -125,3 +125,7 @@ const Interpreter = {
 
   status(msg) { document.getElementById('interp-status').textContent = msg; },
 };
+
+// Top-level `const` in classic scripts does not become a window property;
+// attach explicitly so cross-module `window.Interpreter` checks work.
+window.Interpreter = Interpreter;

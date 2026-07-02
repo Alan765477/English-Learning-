@@ -10,139 +10,98 @@
   <meta name="apple-mobile-web-app-title" content="英语听说" />
   <title>英语听说训练</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=20" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=22" />
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
-  <link rel="stylesheet" href="css/style.css?v=20" />
+  <link rel="stylesheet" href="css/style.css?v=22" />
 </head>
 <body>
   <div id="app">
-    <!-- 听力精听 -->
-    <section class="view" id="view-listen">
+    <!-- 练习：精听 / 跟读 / 听写 三种模式共用同一份句子和进度 -->
+    <section class="view" id="view-practice">
       <header class="view-header">
-        <h1>听力精听</h1>
-        <p class="subtitle">逐句精听 · 字幕 · 音标</p>
+        <h1>练习</h1>
+        <button class="lesson-btn" id="practice-lesson">
+          <span id="practice-lesson-title">日常 · 打招呼与寒暄</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5 12 15.5 18 9.5"/></svg>
+        </button>
       </header>
-      <div class="lesson-picker">
-        <select id="listen-lesson"></select>
+      <div class="seg" id="practice-seg">
+        <button class="seg-btn on" data-mode="listen">精听</button>
+        <button class="seg-btn" data-mode="shadow">跟读</button>
+        <button class="seg-btn" data-mode="dict">听写</button>
       </div>
-      <div class="card sentence-card" id="listen-card">
-        <div class="sentence-progress" id="listen-progress">1 / 1</div>
-        <div class="wave" id="listen-wave" aria-hidden="true"></div>
-        <div class="sentence-en" id="listen-en"></div>
-        <div class="sentence-ipa" id="listen-ipa"></div>
-        <div class="sentence-zh" id="listen-zh"></div>
-        <div class="reveal-hint" id="listen-hint">先盲听，听不懂再点「显示」</div>
-      </div>
-      <div class="controls">
-        <label class="speed-control">
-          语速 <span id="listen-rate-val">1.0x</span>
-          <input type="range" id="listen-rate" min="0.5" max="1.2" step="0.05" value="1" />
-        </label>
-        <div class="toggle-row">
-          <button class="chip" id="toggle-en">英文</button>
-          <button class="chip" id="toggle-ipa">音标</button>
-          <button class="chip" id="toggle-zh">中文</button>
+      <div class="card sentence-card" id="practice-card">
+        <button class="rate-pill" id="practice-rate">1.0x</button>
+        <div class="sentence-progress" id="practice-progress">1 / 1</div>
+        <canvas class="orb-mini" id="practice-orb" aria-hidden="true"></canvas>
+        <div class="sentence-en" id="practice-en"></div>
+        <div class="sentence-ipa hidden" id="practice-ipa"></div>
+        <div class="sentence-zh hidden" id="practice-zh"></div>
+        <div class="dict-result hidden" id="practice-dict-result"></div>
+        <div class="score-box hidden" id="practice-score">
+          <div class="score-num" id="practice-score-num">--</div>
+          <div class="score-detail" id="practice-score-detail"></div>
         </div>
+        <div class="reveal-hint" id="practice-hint">点卡片显示英文 · 左右滑动换句</div>
       </div>
-      <div class="btn-row">
-        <button class="btn-secondary" id="listen-prev">◀ 上一句</button>
-        <button class="btn-primary" id="listen-play">▶ 播放</button>
-        <button class="btn-secondary" id="listen-next">下一句 ▶</button>
+      <div class="hidden" id="dict-row">
+        <textarea id="dict-input" rows="2" placeholder="把你听到的句子打在这里…"></textarea>
       </div>
-    </section>
-
-    <!-- 影子跟读 -->
-    <section class="view hidden" id="view-shadow">
-      <header class="view-header">
-        <h1>影子跟读</h1>
-        <p class="subtitle">听标准音 → 跟读 → 录音对比打分</p>
-      </header>
-      <div class="lesson-picker">
-        <select id="shadow-lesson"></select>
+      <div class="action-bar" id="bar-listen">
+        <button class="btn-round sm" id="listen-prev" title="上一句">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4.5 7.5 12l7.5 7.5"/></svg>
+        </button>
+        <button class="btn-round main" id="listen-play" title="播放">
+          <svg viewBox="0 0 24 24"><path d="M8 5.3v13.4c0 .8.9 1.3 1.6.9l10.5-6.7c.6-.4.6-1.4 0-1.8L9.6 4.4c-.7-.4-1.6.1-1.6.9z" fill="currentColor"/></svg>
+        </button>
+        <button class="btn-round sm" id="listen-next" title="下一句">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5 16.5 12 9 19.5"/></svg>
+        </button>
       </div>
-      <div class="card sentence-card">
-        <div class="sentence-progress" id="shadow-progress">1 / 1</div>
-        <div class="sentence-en" id="shadow-en"></div>
-        <div class="sentence-ipa" id="shadow-ipa"></div>
-        <div class="score-box hidden" id="shadow-score">
-          <div class="score-num" id="shadow-score-num">--</div>
-          <div class="score-detail" id="shadow-heard"></div>
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn-secondary" id="shadow-listen">🔊 标准音</button>
-        <button class="btn-primary" id="shadow-record">🎤 开始跟读</button>
-        <button class="btn-secondary" id="shadow-replay" disabled>↻ 回放</button>
-      </div>
-      <div class="btn-row">
-        <button class="btn-secondary" id="shadow-prev">◀ 上一句</button>
-        <button class="btn-secondary" id="shadow-next">下一句 ▶</button>
-      </div>
-      <p class="mic-status" id="shadow-status"></p>
-    </section>
-
-    <!-- 精听听写 -->
-    <section class="view hidden" id="view-dictation">
-      <header class="view-header">
-        <h1>精听听写</h1>
-        <p class="subtitle">听一句 → 写下来 → 逐词对照</p>
-      </header>
-      <div class="lesson-picker">
-        <select id="dict-lesson"></select>
-      </div>
-      <div class="card sentence-card">
-        <div class="sentence-progress" id="dict-progress">1 / 1</div>
-        <div class="dict-result" id="dict-result"></div>
-      </div>
-      <textarea id="dict-input" rows="3" placeholder="把你听到的句子打在这里…"></textarea>
-      <div class="btn-row">
-        <button class="btn-secondary" id="dict-play">🔊 再听一遍</button>
-        <button class="btn-primary" id="dict-check">✓ 对照答案</button>
-      </div>
-      <div class="btn-row">
-        <button class="btn-secondary" id="dict-prev">◀ 上一句</button>
-        <button class="btn-secondary" id="dict-next">下一句 ▶</button>
-      </div>
-    </section>
-
-    <!-- AI 口语陪练（纯语音） -->
-    <section class="view hidden" id="view-ai">
-      <header class="view-header">
-        <h1>AI 口语陪练</h1>
-        <p class="subtitle">纯语音对话 · 智能纠错</p>
-      </header>
-      <div class="ai-stage">
-        <canvas class="orb" id="ai-orb" aria-hidden="true"></canvas>
-        <p class="ai-state" id="ai-state">点麦克风，开口说英语</p>
-        <div class="ai-sub" id="ai-sub-user"></div>
-        <div class="ai-sub ai" id="ai-sub-ai"></div>
-        <div class="ai-sub corr" id="ai-sub-corr"></div>
-        <div class="topic-chips" id="ai-topics">
-          <button class="chip topic" data-topic="Let's talk about my day. Ask me what I did today.">聊聊今天</button>
-          <button class="chip topic" data-topic="Let's role-play ordering food at a restaurant. You are the waiter.">餐厅点餐</button>
-          <button class="chip topic" data-topic="Let's practice a job interview. You are the interviewer.">模拟面试</button>
-          <button class="chip topic" data-topic="Let's chat about travel and my favorite places.">旅行话题</button>
-        </div>
-      </div>
-      <div class="ai-dock">
-        <button class="ai-mini" id="ai-kb" title="改用打字">⌨️</button>
-        <button class="ai-talk" id="ai-talk" title="说话">
+      <div class="action-bar hidden" id="bar-shadow">
+        <button class="btn-round sm" id="shadow-listen" title="听标准音">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5v5H8L12.5 19V5L8 9.5z" fill="currentColor" stroke="none"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6"/><path d="M18 6.5a8 8 0 0 1 0 11"/></svg>
+        </button>
+        <button class="btn-round main rec" id="shadow-record" title="跟读">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/><path d="M8.5 21h7"/></svg>
         </button>
-        <button class="ai-mini" id="ai-replay" title="重听上一句">🔊</button>
+        <button class="btn-round sm" id="shadow-replay" title="回放" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 11.5a7.5 7.5 0 1 1 2.2 5.6"/><path d="M4.5 6.5v5H9.5"/></svg>
+        </button>
       </div>
-      <div class="ai-text-row hidden" id="ai-text-row">
-        <input type="text" id="ai-text" placeholder="打字也可以，回车发送…" />
-        <button class="btn-send" id="ai-send">发送</button>
+      <div class="action-bar hidden" id="bar-dict">
+        <button class="btn-round sm" id="dict-play" title="再听一遍">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5v5H8L12.5 19V5L8 9.5z" fill="currentColor" stroke="none"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6"/><path d="M18 6.5a8 8 0 0 1 0 11"/></svg>
+        </button>
+        <button class="btn-round main check" id="dict-check" title="对照答案">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 10 18 19.5 7"/></svg>
+        </button>
+        <button class="btn-round sm" id="dict-next" title="下一句">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5 16.5 12 9 19.5"/></svg>
+        </button>
       </div>
-      <p class="ai-warn" id="ai-warn"></p>
+      <p class="mic-status" id="practice-status"></p>
+      <div class="tool-row">
+        <button class="tool-card" data-goto="video">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3.5"/><path d="M10 9.3l4.5 2.7L10 14.7z" fill="currentColor" stroke="none"/></svg>
+          <span class="tool-name">视频学习</span>
+          <span class="tool-sub">YouTube · B站 · 复读</span>
+        </button>
+        <button class="tool-card" data-goto="interp">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.7 2.4 4.1 5.6 4.1 9s-1.4 6.6-4.1 9c-2.7-2.4-4.1-5.6-4.1-9S9.3 5.4 12 3z"/></svg>
+          <span class="tool-name">实时翻译</span>
+          <span class="tool-sub">英语 → 中文字幕</span>
+        </button>
+      </div>
     </section>
 
-    <!-- 视频学习 -->
+    <!-- 视频学习（练习页的子页面） -->
     <section class="view hidden" id="view-video">
-      <header class="view-header">
+      <header class="view-header subpage">
+        <button class="back-btn" data-goto="practice">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4.5 7.5 12l7.5 7.5"/></svg>练习
+        </button>
         <h1>视频学习</h1>
-        <p class="subtitle">贴 YouTube / B站 链接 · 变速 · 句子复读</p>
       </header>
       <div class="toggle-row source-toggle">
         <button class="chip on" data-src="youtube">YouTube</button>
@@ -164,18 +123,20 @@
           <button class="btn-secondary" id="video-back5">⟲ 退5秒</button>
           <button class="btn-secondary" id="video-mark-a">设 A 点</button>
           <button class="btn-secondary" id="video-mark-b">设 B 点</button>
-          <button class="btn-primary" id="video-loop">🔁 复读</button>
+          <button class="btn-primary" id="video-loop">复读</button>
         </div>
         <p class="mic-status" id="video-status"></p>
       </div>
       <p class="hint" id="video-hint"></p>
     </section>
 
-    <!-- 实时翻译 / 同传 -->
+    <!-- 实时翻译（练习页的子页面） -->
     <section class="view hidden" id="view-interp">
-      <header class="view-header">
+      <header class="view-header subpage">
+        <button class="back-btn" data-goto="practice">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4.5 7.5 12l7.5 7.5"/></svg>练习
+        </button>
         <h1>实时翻译</h1>
-        <p class="subtitle">听英语 → 实时转中文字幕 / 朗读</p>
       </header>
       <div class="toggle-row" id="interp-modes">
         <button class="chip on" data-mode="subtitle">只字幕</button>
@@ -191,23 +152,55 @@
       <div id="interp-list" class="interp-list" data-empty="开始后，这里会逐句显示英文和中文翻译"></div>
     </section>
 
+    <!-- AI 口语陪练（纯语音） -->
+    <section class="view hidden" id="view-ai">
+      <header class="view-header">
+        <h1>陪练</h1>
+      </header>
+      <div class="ai-stage">
+        <canvas class="orb" id="ai-orb" aria-hidden="true"></canvas>
+        <p class="ai-state" id="ai-state">点麦克风，开口说英语</p>
+        <button class="btn-primary ai-setup hidden" id="ai-setup">连接 AI 外教</button>
+        <div class="ai-sub" id="ai-sub-user"></div>
+        <div class="ai-sub ai" id="ai-sub-ai"></div>
+        <div class="ai-sub corr" id="ai-sub-corr"></div>
+        <div class="topic-chips" id="ai-topics">
+          <button class="chip topic" data-topic="Let's talk about my day. Ask me what I did today.">聊聊今天</button>
+          <button class="chip topic" data-topic="Let's role-play ordering food at a restaurant. You are the waiter.">餐厅点餐</button>
+          <button class="chip topic" data-topic="Let's practice a job interview. You are the interviewer.">模拟面试</button>
+          <button class="chip topic" data-topic="Let's chat about travel and my favorite places.">旅行话题</button>
+        </div>
+      </div>
+      <div class="ai-dock">
+        <button class="ai-mini" id="ai-kb" title="改用打字">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.2 10h.01M9.7 10h.01M13.2 10h.01M16.7 10h.01M6.2 13.2h.01M9.7 13.2h.01M13.2 13.2h.01M16.7 13.2h.01M8 15.8h8"/></svg>
+        </button>
+        <button class="ai-talk" id="ai-talk" title="说话">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/><path d="M8.5 21h7"/></svg>
+        </button>
+        <button class="ai-mini" id="ai-replay" title="重听上一句">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5v5H8L12.5 19V5L8 9.5z" fill="currentColor" stroke="none"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6"/><path d="M18 6.5a8 8 0 0 1 0 11"/></svg>
+        </button>
+      </div>
+      <div class="ai-text-row hidden" id="ai-text-row">
+        <input type="text" id="ai-text" placeholder="打字也可以，回车发送…" />
+        <button class="btn-send" id="ai-send">发送</button>
+      </div>
+      <p class="ai-warn" id="ai-warn"></p>
+    </section>
+
     <!-- 生词本 -->
     <section class="view hidden" id="view-vocab">
       <header class="view-header">
-        <h1>生词本</h1>
-        <p class="subtitle">收藏单词 · 自动翻译 · 闪卡复习</p>
+        <h1>生词</h1>
       </header>
-      <div class="vocab-stats">
-        <span>共 <b id="vocab-count">0</b> 词</span>
-        <span>🔥 连续学习 <b id="vocab-streak">0</b> 天</span>
-      </div>
       <div class="video-input">
         <input type="text" id="vocab-word" placeholder="输入单词或短语…" />
         <button class="btn-send" id="vocab-add">添加</button>
       </div>
       <div id="vocab-browse">
         <div class="btn-row">
-          <button class="btn-primary" id="vocab-review">▶ 开始复习</button>
+          <button class="btn-primary" id="vocab-review">▶ 开始复习（<span id="vocab-count">0</span> 词）</button>
         </div>
         <div id="vocab-list" class="vocab-list" data-empty="还没有生词，在上面输入单词添加吧"></div>
       </div>
@@ -225,102 +218,120 @@
       </div>
     </section>
 
-    <!-- 设置 -->
-    <section class="view hidden" id="view-settings">
+    <!-- 我的：学习记录 + 设置 -->
+    <section class="view hidden" id="view-me">
       <header class="view-header">
-        <h1>设置</h1>
-        <p class="subtitle">AI 外教需要填入 API Key 才能使用</p>
+        <h1>我的</h1>
       </header>
-      <div class="card">
-        <label class="field">
-          AI 服务商
-          <select id="set-provider">
-            <option value="claude">Claude（英语质量最佳）</option>
-            <option value="deepseek">DeepSeek（便宜·国内直连）</option>
-          </select>
-        </label>
-        <label class="field">
-          API Key
-          <input type="password" id="set-apikey" placeholder="粘贴你的 API Key" autocomplete="off" />
-        </label>
-        <label class="field">
-          模型
-          <input type="text" id="set-model" placeholder="留空用默认" />
-        </label>
-        <p class="hint" id="set-model-hint"></p>
-        <button class="btn-primary" id="set-save">保存</button>
-        <p class="saved-tip hidden" id="set-saved">✓ 已保存（仅存在本机浏览器）</p>
+      <div class="stat-row">
+        <div class="stat-card"><b id="me-streak">0</b><span>天连续学习</span></div>
+        <div class="stat-card"><b id="me-vocab">0</b><span>个生词</span></div>
       </div>
-      <div class="card">
-        <h3 style="margin-bottom:12px">Azure 神经语音（可选 · 真人级发音 + 专业打分）</h3>
-        <label class="field">
-          Azure 语音 Key
-          <input type="password" id="set-azure-key" placeholder="填入后，朗读与跟读改用 Azure" autocomplete="off" />
-        </label>
-        <label class="field">
-          区域 Region
-          <input type="text" id="set-azure-region" placeholder="如 eastasia / southeastasia" />
-        </label>
-        <label class="field">
-          音色
-          <select id="set-azure-voice">
-            <option value="en-US-AvaMultilingualNeural">Ava（美音·自然女声）</option>
-            <option value="en-US-JennyNeural">Jenny（美音·女声）</option>
-            <option value="en-US-GuyNeural">Guy（美音·男声）</option>
-            <option value="en-GB-SoniaNeural">Sonia（英音·女声）</option>
-            <option value="en-GB-RyanNeural">Ryan（英音·男声）</option>
-          </select>
-        </label>
-        <button class="btn-primary" id="set-azure-save">保存 Azure</button>
-        <p class="saved-tip hidden" id="set-azure-saved">✓ 已保存</p>
-        <p class="hint">留空则用手机自带免费语音。每月有 50 万字符免费额度，个人用基本免费。</p>
+      <div class="list-group">
+        <button class="list-row" id="row-ai">
+          <span class="row-icon ic-blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5a8 8 0 0 1-11.6 7.1L4 20l1.4-4.9A8 8 0 1 1 20.5 11.5z"/></svg>
+          </span>
+          <span class="row-label">AI 外教</span>
+          <span class="row-value" id="row-ai-val">未连接</span>
+          <svg class="row-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5.5 15.5 12 9 18.5"/></svg>
+        </button>
+        <button class="list-row" id="row-voice">
+          <span class="row-icon ic-purple">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5v5H8L12.5 19V5L8 9.5z" fill="currentColor" stroke="none"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6"/><path d="M18 6.5a8 8 0 0 1 0 11"/></svg>
+          </span>
+          <span class="row-label">发音与音色</span>
+          <span class="row-value" id="row-voice-val"></span>
+          <svg class="row-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5.5 15.5 12 9 18.5"/></svg>
+        </button>
       </div>
-      <div class="card">
-        <label class="field">
-          手机自带朗读语音
-          <select id="set-voice"></select>
-        </label>
-        <p class="hint">用于听力、跟读、听写的标准发音，选 ✨高质量 的最自然。<br>iPhone 下载更自然的语音：设置 → 辅助功能 → 朗读内容 → 声音 → 英语 → 选「增强/高级」下载，再回这里选它。</p>
-      </div>
-      <div class="card about">
-        <h3>关于</h3>
-        <p>纯本地网页应用。听力播放、跟读、听写完全免费、可离线；AI 对话需联网并消耗 API 额度。API Key 只保存在你的手机本地，不会上传。</p>
-      </div>
+      <p class="about-note">纯本地网页应用：听力、跟读、听写免费、可离线；AI 对话与实时翻译需联网并消耗 API 额度。API Key 只保存在你的手机本地，不会上传。</p>
     </section>
 
-    <!-- 底部导航 -->
+    <!-- 底部导航：练习 / 陪练 / 生词 / 我的 -->
     <nav class="tabbar">
-      <button class="tab active" data-view="listen">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="2.6" y="13.5" width="4.6" height="6.6" rx="2.1"/><rect x="16.8" y="13.5" width="4.6" height="6.6" rx="2.1"/></svg>精听</button>
-      <button class="tab" data-view="shadow">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21"/><path d="M8.5 21h7"/></svg>跟读</button>
-      <button class="tab" data-view="dictation">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16.8 3.2a2 2 0 0 1 2.8 2.8L8.5 17.1l-3.8 1 1-3.8z"/><path d="M14.3 5.7l3.9 3.9"/></svg>听写</button>
+      <button class="tab active" data-view="practice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="2.6" y="13.5" width="4.6" height="6.6" rx="2.1"/><rect x="16.8" y="13.5" width="4.6" height="6.6" rx="2.1"/></svg>练习</button>
       <button class="tab" data-view="ai">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5a8 8 0 0 1-11.6 7.1L4 20l1.4-4.9A8 8 0 1 1 20.5 11.5z"/></svg>陪练</button>
-      <button class="tab" data-view="video">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3.5"/><path d="M10 9.3l4.5 2.7L10 14.7z" fill="currentColor" stroke="none"/></svg>视频</button>
-      <button class="tab" data-view="interp">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.7 2.4 4.1 5.6 4.1 9s-1.4 6.6-4.1 9c-2.7-2.4-4.1-5.6-4.1-9S9.3 5.4 12 3z"/></svg>翻译</button>
       <button class="tab" data-view="vocab">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10.5 5.3 8.4 4.6 6 4.6c-1 0-2 .1-3 .4v13c1-.3 2-.4 3-.4 2.4 0 4.5.7 6 1.9 1.5-1.2 3.6-1.9 6-1.9 1 0 2 .1 3 .4v-13c-1-.3-2-.4-3-.4-2.4 0-4.5.7-6 1.9z"/><path d="M12 6.5V19"/></svg>生词</button>
-      <button class="tab" data-view="settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5c.08-.5.1-1 .1-1.5s-.02-1-.1-1.5l2-1.55-2-3.46-2.4.97a7.6 7.6 0 0 0-2.6-1.5L13.9 2h-3.8l-.5 2.96a7.6 7.6 0 0 0-2.6 1.5l-2.4-.97-2 3.46 2 1.55c-.08.5-.1 1-.1 1.5s.02 1 .1 1.5l-2 1.55 2 3.46 2.4-.97a7.6 7.6 0 0 0 2.6 1.5l.5 2.96h3.8l.5-2.96a7.6 7.6 0 0 0 2.6-1.5l2.4.97 2-3.46z"/></svg>设置</button>
+      <button class="tab" data-view="me">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>我的</button>
     </nav>
+
+    <!-- 底部 Sheet -->
+    <div class="sheet-backdrop" id="sheet-backdrop"></div>
+    <div class="sheet" id="sheet-lesson">
+      <div class="sheet-grab"></div>
+      <h3 class="sheet-title">选择课程</h3>
+      <div class="sheet-list" id="lesson-list"></div>
+    </div>
+    <div class="sheet" id="sheet-ai">
+      <div class="sheet-grab"></div>
+      <h3 class="sheet-title">AI 外教</h3>
+      <label class="field">
+        服务商
+        <select id="set-provider">
+          <option value="claude">Claude（英语质量最佳）</option>
+          <option value="deepseek">DeepSeek（便宜·国内直连）</option>
+        </select>
+      </label>
+      <label class="field">
+        API Key
+        <input type="password" id="set-apikey" placeholder="粘贴你的 API Key" autocomplete="off" />
+      </label>
+      <label class="field">
+        模型
+        <input type="text" id="set-model" placeholder="留空用默认" />
+      </label>
+      <p class="hint" id="set-model-hint"></p>
+      <button class="btn-primary" id="set-save">保存</button>
+      <p class="saved-tip hidden" id="set-saved">✓ 已保存（仅存在本机浏览器）</p>
+    </div>
+    <div class="sheet" id="sheet-voice">
+      <div class="sheet-grab"></div>
+      <h3 class="sheet-title">发音与音色</h3>
+      <label class="field">
+        手机自带朗读语音
+        <select id="set-voice"></select>
+      </label>
+      <p class="hint">选 ✨高质量 的最自然。iPhone 可先到 设置 → 辅助功能 → 朗读内容 → 声音 → 英语 下载「增强」语音，再回这里选它。</p>
+      <div class="sheet-divider">Azure 神经语音 · 可选（真人级发音 + 专业打分）</div>
+      <label class="field">
+        Azure 语音 Key
+        <input type="password" id="set-azure-key" placeholder="填入后，朗读与跟读改用 Azure" autocomplete="off" />
+      </label>
+      <label class="field">
+        区域 Region
+        <input type="text" id="set-azure-region" placeholder="如 eastasia / southeastasia" />
+      </label>
+      <label class="field">
+        音色
+        <select id="set-azure-voice">
+          <option value="en-US-AvaMultilingualNeural">Ava（美音·自然女声）</option>
+          <option value="en-US-JennyNeural">Jenny（美音·女声）</option>
+          <option value="en-US-GuyNeural">Guy（美音·男声）</option>
+          <option value="en-GB-SoniaNeural">Sonia（英音·女声）</option>
+          <option value="en-GB-RyanNeural">Ryan（英音·男声）</option>
+        </select>
+      </label>
+      <button class="btn-primary" id="set-azure-save">保存 Azure</button>
+      <p class="saved-tip hidden" id="set-azure-saved">✓ 已保存</p>
+      <p class="hint">留空则用手机自带免费语音。每月有 50 万字符免费额度，个人用基本免费。</p>
+    </div>
   </div>
 
-  <script src="js/storage.js?v=20"></script>
-  <script src="js/lessons.js?v=20"></script>
-  <script src="js/azure.js?v=20"></script>
-  <script src="js/speech.js?v=20"></script>
-  <script src="js/listening.js?v=20"></script>
-  <script src="js/shadowing.js?v=20"></script>
-  <script src="js/dictation.js?v=20"></script>
-  <script src="js/ai.js?v=20"></script>
-  <script src="js/video.js?v=20"></script>
-  <script src="js/translate.js?v=20"></script>
-  <script src="js/vocab.js?v=20"></script>
-  <script src="js/orb.js?v=20"></script>
-  <script src="js/app.js?v=20"></script>
+  <script src="js/storage.js?v=22"></script>
+  <script src="js/lessons.js?v=22"></script>
+  <script src="js/azure.js?v=22"></script>
+  <script src="js/speech.js?v=22"></script>
+  <script src="js/orb.js?v=22"></script>
+  <script src="js/practice.js?v=22"></script>
+  <script src="js/ai.js?v=22"></script>
+  <script src="js/video.js?v=22"></script>
+  <script src="js/translate.js?v=22"></script>
+  <script src="js/vocab.js?v=22"></script>
+  <script src="js/app.js?v=22"></script>
 </body>
 </html>

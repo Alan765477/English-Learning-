@@ -99,7 +99,9 @@ const Azure = {
     return map[status] || ('Azure 请求失败(' + status + ')');
   },
 
-  async speak(text, rate = 1) {
+  // Synthesize `text` to an audio blob URL (no playback). Split from play()
+  // so the AI partner can prefetch the NEXT sentence while one is playing.
+  async synth(text, rate = 1) {
     const key = (Store.get('azureKey') || '').replace(/\s+/g, '');
     const region = Store.get('azureRegion');
     const voice = Store.get('azureVoice') || 'en-US-AvaMultilingualNeural';
@@ -124,9 +126,10 @@ const Azure = {
       throw new Error('连不上 Azure——多半是区域(Region)填错，或网络问题');
     }
     if (!res.ok) throw new Error(this._httpReason(res.status));
+    return URL.createObjectURL(await res.blob());
+  },
 
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
+  async play(url) {
     this.stop();
     if (this._ctx && this._ctx.state === 'suspended') { try { await this._ctx.resume(); } catch {} }
     // Reuse the element primed during unlock() so playback survives the network
@@ -136,7 +139,8 @@ const Azure = {
     return new Promise((resolve, reject) => {
       this.cur = a;
       let settled = false;
-      const done = () => { if (settled) return; settled = true; URL.revokeObjectURL(url); resolve(); };
+      const done = () => { if (settled) return; settled = true; a._settle = null; URL.revokeObjectURL(url); resolve(); };
+      a._settle = done; // stop() calls this so awaiting callers never hang
       a.onended = done;
       a.onerror = done;
       // iOS can interrupt the audio session (e.g. after using the mic for
@@ -147,17 +151,24 @@ const Azure = {
           try { if (this._ctx) await this._ctx.resume(); } catch {}
           return tryPlay(false);
         }
-        settled = true; URL.revokeObjectURL(url);
+        settled = true; a._settle = null; URL.revokeObjectURL(url);
         reject(new Error('iPhone 拦截了播放（请确认已先点过屏幕、且未静音）'));
       });
       tryPlay(true);
     });
   },
 
+  async speak(text, rate = 1) {
+    const url = await this.synth(text, rate);
+    return this.play(url);
+  },
+
   stop() {
     if (!this.cur) return;
-    try { this.cur.pause(); } catch {}
+    const a = this.cur;
     this.cur = null;
+    try { a.pause(); } catch {}
+    if (a._settle) a._settle(); // resolve the pending play() promise
   },
 
   loadSDK() {

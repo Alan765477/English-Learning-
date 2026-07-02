@@ -74,18 +74,31 @@ const Speech = {
   },
 
   // Listen once, resolve with recognized transcript (lowercased).
-  recognizeOnce() {
+  // `onInterim` (optional) receives the live partial transcript while the
+  // user is still talking, so the UI can show words as they're spoken.
+  recognizeOnce(onInterim) {
     return new Promise((resolve, reject) => {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) { reject(new Error('not-supported')); return; }
       const rec = new SR();
       rec.lang = 'en-US';
-      rec.interimResults = false;
+      rec.interimResults = true;
       rec.maxAlternatives = 1;
       let done = false;
       rec.onresult = (e) => {
-        done = true;
-        resolve((e.results[0][0].transcript || '').trim().toLowerCase());
+        let finalText = '', interim = '';
+        for (let i = 0; i < e.results.length; i++) {
+          const r = e.results[i];
+          if (r.isFinal) finalText += r[0].transcript + ' ';
+          else interim += r[0].transcript;
+        }
+        if (finalText.trim()) {
+          done = true;
+          resolve(finalText.trim().toLowerCase());
+          try { rec.stop(); } catch {}
+        } else if (onInterim) {
+          onInterim(interim.trim());
+        }
       };
       rec.onerror = (e) => { if (!done) reject(new Error(e.error || 'error')); };
       rec.onend = () => { if (!done) reject(new Error('no-speech')); };
