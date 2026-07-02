@@ -61,7 +61,7 @@
     white-space: nowrap; transition: background .15s;
   }
   .seg button.on { background: var(--seg-on); box-shadow: 0 1px 3px rgba(0,0,0,.4); font-weight: 600; }
-  .chips { display: flex; gap: 8px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
   .chip {
     border: none; background: var(--surface); color: var(--text2);
     border-radius: 999px; padding: 7px 13px; font-size: 12.5px; cursor: pointer;
@@ -173,6 +173,7 @@
   <div class="chips">
     <button class="chip" id="ti-speak">🔈 朗读</button>
     <button class="chip" id="ti-rec">⏺ 录音</button>
+    <button class="chip" id="ti-screen">🎥 录屏</button>
     <button class="chip" id="ti-minutes">📝 纪要</button>
   </div>
 </div>
@@ -230,6 +231,7 @@
   <div class="row">
     <button id="minutes-copy" class="btn primary">复制</button>
     <button id="minutes-dl" class="btn ghost">下载</button>
+    <button id="minutes-transcript" class="btn ghost">字幕</button>
     <button id="minutes-close" class="btn ghost">关闭</button>
   </div>
 </div>
@@ -454,6 +456,66 @@ const Recorder = {
 };
 
 // ---------------------------------------------------------------------------
+// Screen recording for post-meeting review: meeting VIDEO + meeting audio +
+// the user's mic in one webm file. When the File System Access API is
+// available the recording streams straight to disk (memory stays flat during
+// hour-long meetings); otherwise chunks are kept in memory and downloaded.
+const ScreenRec = {
+  active: false,
+  mr: null, ctx: null, chunks: [], writable: null, streams: [],
+
+  async start() {
+    const disp = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    this.streams.push(disp);
+    let mic = null;
+    try { mic = await navigator.mediaDevices.getUserMedia({ audio: true }); this.streams.push(mic); } catch {}
+    const AC = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AC();
+    const dest = this.ctx.createMediaStreamDestination();
+    [disp, mic].filter(s => s && s.getAudioTracks().length).forEach(s => {
+      try { this.ctx.createMediaStreamSource(s).connect(dest); } catch {}
+    });
+    const stream = new MediaStream([...disp.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm';
+    this.mr = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1200000, audioBitsPerSecond: 96000 });
+    this.chunks = [];
+    this.mr.ondataavailable = (e) => {
+      if (!e.data || !e.data.size) return;
+      if (this.writable) this.writable.write(e.data).catch(() => {});
+      else this.chunks.push(e.data);
+    };
+    // Browser's own "stop sharing" bar ends the recording too.
+    disp.getVideoTracks()[0].onended = () => { if (this.active) TeamsInterp.toggleScreenRec(); };
+    this.mr.start(2000);
+    this.active = true;
+  },
+
+  // Resolves with 'saved' (streamed to disk), a Blob (in-memory), or null.
+  stop() {
+    this.active = false;
+    return new Promise((resolve) => {
+      const mr = this.mr;
+      this.mr = null;
+      if (!mr) { resolve(null); return; }
+      mr.onstop = async () => {
+        this.streams.forEach(s => s.getTracks().forEach(t => t.stop()));
+        this.streams = [];
+        try { if (this.ctx) this.ctx.close(); } catch {}
+        this.ctx = null;
+        if (this.writable) {
+          try { await this.writable.close(); } catch {}
+          this.writable = null;
+          resolve('saved');
+        } else {
+          resolve(this.chunks.length ? new Blob(this.chunks, { type: 'video/webm' }) : null);
+        }
+      };
+      try { mr.stop(); } catch { mr.onstop(); }
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Azure Speech SDK, loaded from CDN only when first needed.
 let _sdkPromise = null;
 function loadSpeechSDK() {
@@ -531,7 +593,14 @@ const TeamsInterp = {
     };
 
     document.getElementById('ti-rec').onclick = () => this.toggleRecord();
+    document.getElementById('ti-screen').onclick = () => this.toggleScreenRec();
+    if (!displayOK) document.getElementById('ti-screen').classList.add('hidden');
     document.getElementById('ti-minutes').onclick = () => this.makeMinutes();
+    document.getElementById('minutes-transcript').onclick = () => {
+      if (!this.transcript.length) { this.status('还没有字幕内容'); return; }
+      this.download(new Blob([this.transcriptText()], { type: 'text/plain' }),
+        'meeting-transcript-' + this.stamp() + '.txt');
+    };
     document.getElementById('minutes-close').onclick = () => document.getElementById('ti-minutes-sheet').classList.add('hidden');
     document.getElementById('minutes-copy').onclick = () => {
       const t = document.getElementById('minutes-body').textContent;
@@ -852,19 +921,63 @@ const TeamsInterp = {
     }
   },
 
+  // ---- Screen recording (video + all audio, for post-meeting review) ----
+  async toggleScreenRec() {
+    const chip = document.getElementById('ti-screen');
+    if (ScreenRec.active) {
+      const out = await ScreenRec.stop();
+      chip.classList.remove('rec-on');
+      chip.textContent = '🎥 录屏';
+      if (out === 'saved') this.status('录屏已保存');
+      else if (out) { this.download(out, 'meeting-screen-' + this.stamp() + '.webm'); this.status('录屏已保存到下载'); }
+      else this.status('没有录到内容');
+      return;
+    }
+    try {
+      // Pick the save location inside the click gesture so hour-long
+      // recordings stream to disk instead of piling up in memory.
+      if (window.showSaveFilePicker) {
+        try {
+          const h = await showSaveFilePicker({
+            suggestedName: 'meeting-screen-' + this.stamp() + '.webm',
+            types: [{ description: 'WebM 视频', accept: { 'video/webm': ['.webm'] } }],
+          });
+          ScreenRec.writable = await h.createWritable();
+        } catch (e) {
+          if (e && e.name === 'AbortError') return; // user cancelled the save dialog
+          ScreenRec.writable = null;
+        }
+      }
+      await ScreenRec.start();
+      chip.classList.add('rec-on');
+      chip.textContent = '🎥 录屏中';
+      this.status('录屏中：画面 + 会议声音 + 我的麦克风（约每小时 0.5~1GB）');
+    } catch (err) {
+      if (ScreenRec.writable) { try { ScreenRec.writable.close(); } catch {} ScreenRec.writable = null; }
+      this.status('无法开始录屏：' + (err && err.message ? err.message : '已取消'));
+    }
+  },
+
+  transcriptText() {
+    return this.transcript.map(l => {
+      const who = l.who === 'me' ? '我' : l.who === 'them' ? '对方' : '发言';
+      return who + '：' + l.src + (l.out ? '\n　　' + l.out : '');
+    }).join('\n');
+  },
+
   // ---- Meeting minutes ----
   async makeMinutes() {
     if (!this.transcript.length) { this.status('还没有字幕内容，先翻译一会儿再生成纪要'); return; }
-    if (!AI.configured()) { this.openSettings(); this.status('生成纪要需要 AI Key（Claude 或 DeepSeek）'); return; }
     const sheet = document.getElementById('ti-minutes-sheet');
     const body = document.getElementById('minutes-body');
     document.getElementById('minutes-hint').textContent = '共 ' + this.transcript.length + ' 句字幕';
-    body.textContent = '生成中…';
     sheet.classList.remove('hidden');
-    const text = this.transcript.map(l => {
-      const who = l.who === 'me' ? '我' : l.who === 'them' ? '对方' : '发言';
-      return who + '：' + l.src + (l.out ? '（' + l.out + '）' : '');
-    }).join('\n');
+    if (!AI.configured()) {
+      body.textContent = '生成纪要需要 AI Key（Claude 或 DeepSeek）——点右上 ⚙️ 填写。\n\n不填 Key 也可以点「字幕」下载本次全部原文+译文。';
+      return;
+    }
+    body.textContent = '生成中…';
+    const text = this.transcriptText();
     try {
       body.textContent = await AI.minutes(text.slice(-24000)); // keep prompt bounded
     } catch (err) {
