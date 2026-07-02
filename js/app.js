@@ -7,7 +7,7 @@ const App = {
   init() {
     Speech.init();
     // Init each module independently so one failure can't break the rest.
-    [Practice, AI, Video, Interpreter, Vocab].forEach(m => {
+    [Practice, Importer, AI, Video, Interpreter, Vocab].forEach(m => {
       try { m.init(); } catch (e) { console.error('init failed', e); }
     });
     try { this.initSettings(); } catch (e) { console.error(e); }
@@ -212,7 +212,7 @@ function toast(msg, ms = 5000) {
 
 // ---- Auto-update: silently reload when a newer build is deployed ----
 // Keep APP_BUILD in sync with the ?v=NN on the asset URLs in index.html.
-const APP_BUILD = 24;
+const APP_BUILD = 25;
 async function checkUpdate() {
   try {
     const html = await (await fetch('./index.html?_=' + Date.now(), { cache: 'no-store' })).text();

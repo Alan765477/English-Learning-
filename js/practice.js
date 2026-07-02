@@ -22,8 +22,14 @@ const Practice = {
 
   RATES: [0.75, 1, 1.25],
 
-  cur() { return LESSONS[this.lessonIdx].sentences[this.i]; },
-  lesson() { return LESSONS[this.lessonIdx]; },
+  // Built-in lessons + user-imported custom lessons.
+  lessons() { return LESSONS.concat(window.Importer ? Importer.list() : []); },
+  lesson() {
+    const all = this.lessons();
+    if (this.lessonIdx >= all.length) this.lessonIdx = 0;
+    return all[this.lessonIdx];
+  },
+  cur() { return this.lesson().sentences[this.i]; },
 
   init() {
     // Mode segmented control.
@@ -387,25 +393,55 @@ const Practice = {
     return `<div class="dict-summary">正确 ${correct}/${total}（${pct}%）</div>${html}`;
   },
 
-  // ---- Lesson sheet ----
+  // ---- Lesson sheet (built-ins + custom, with delete for custom) ----
   buildLessonSheet() {
     const el = document.getElementById('lesson-list');
-    el.innerHTML = LESSONS.map((l, idx) => `
+    const all = this.lessons();
+    if (this.lessonIdx >= all.length) this.lessonIdx = 0;
+    el.innerHTML = all.map((l, idx) => `
       <button class="sheet-row" data-idx="${idx}">
         <span class="sheet-row-main">${l.title}<span class="sheet-row-sub">${l.level} · ${l.sentences.length} 句</span></span>
-        <span class="sheet-check ${idx === this.lessonIdx ? '' : 'hidden'}">✓</span>
+        <span class="sheet-row-side">
+          ${l.custom ? `<span class="lesson-del" data-id="${l.id}">删除</span>` : ''}
+          <span class="sheet-check ${idx === this.lessonIdx ? '' : 'hidden'}">✓</span>
+        </span>
       </button>`).join('');
     el.querySelectorAll('.sheet-row').forEach(row => {
-      row.onclick = () => {
+      row.onclick = (e) => {
+        const del = e.target.closest('.lesson-del');
+        if (del) {
+          e.stopPropagation();
+          this.deleteCustom(del.dataset.id);
+          return;
+        }
         this.lessonIdx = +row.dataset.idx;
         this.i = 0;
         this.lastUrl = null;
-        el.querySelectorAll('.sheet-check').forEach((c, k) =>
-          c.classList.toggle('hidden', k !== this.lessonIdx));
+        this.buildLessonSheet();
         this.render();
         if (window.Sheet) Sheet.close();
       };
     });
+  },
+
+  selectLesson(id) {
+    const idx = this.lessons().findIndex(l => l.id === id);
+    if (idx < 0) return;
+    this.lessonIdx = idx;
+    this.i = 0;
+    this.lastUrl = null;
+    this.buildLessonSheet();
+    this.render();
+  },
+
+  deleteCustom(id) {
+    if (!window.Importer) return;
+    if (!confirm('删除这套自定义课程？')) return;
+    const cur = this.lesson();
+    Importer.remove(id);
+    if (cur && cur.id === id) { this.lessonIdx = 0; this.i = 0; this.render(); }
+    else if (cur) { this.lessonIdx = Math.max(0, this.lessons().findIndex(l => l.id === cur.id)); }
+    this.buildLessonSheet();
   },
 };
 

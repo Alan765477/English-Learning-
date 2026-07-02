@@ -424,9 +424,15 @@ html, body {
 .sheet-check { color: var(--primary); font-size: 17px; font-weight: 700; }
 .sheet-divider { font-size: 13px; font-weight: 600; color: var(--text-dim); margin: 20px 0 12px; }
 
+/* Lesson import */
+.import-btn { width: 100%; margin-top: 12px; }
+.sheet .btn-primary { width: 100%; }
+.sheet-row-side { display: flex; align-items: center; gap: 14px; flex: none; }
+.lesson-del { color: var(--bad); font-size: 13px; font-weight: 500; padding: 4px 2px; }
+
 /* Settings fields (inside sheets) */
 .field { display: block; font-size: 14px; color: var(--text-dim); margin-bottom: 16px; font-weight: 500; }
-.field select, .field input {
+.field select, .field input, .field textarea {
   width: 100%;
   background: var(--surface-2);
   color: var(--text);
