@@ -55,12 +55,11 @@
 ## 文件说明
 
 ```
-index.html      翻译页面（字幕 UI）
-app.js          捕获声音 + 流式翻译逻辑（自包含，无依赖）
-config.html     Teams 添加应用时的配置页（点保存即可）
-manifest.json   Teams 应用清单
-color.png       应用图标 192×192
-outline.png     应用轮廓图标 32×32
-teams-app.zip   现成的 Teams 安装包
-package.sh      重新打包 teams-app.zip
+index.html      全部功能都在这一个文件里：字幕 UI + 翻译逻辑 +
+                Teams 配置页（?config=1 时）。网站只需要这一个文件。
+manifest.json   Teams 应用清单（打包进 teams-app.zip 用，网站不需要）
+color.png       应用图标 192×192（同上）
+outline.png     应用轮廓图标 32×32（同上）
+teams-app.zip   现成的 Teams 安装包（manifest + 两个图标）
+package.sh      改过 manifest 后重新打包 teams-app.zip
 ```

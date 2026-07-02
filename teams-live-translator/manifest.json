@@ -25,10 +25,16 @@
   "accentColor": "#4F46E5",
   "configurableTabs": [
     {
-      "configurationUrl": "https://alan765477.github.io/teams-live-translator/config.html",
+      "configurationUrl": "https://alan765477.github.io/teams-live-translator/index.html?config=1",
       "canUpdateConfiguration": false,
-      "scopes": ["groupChat"],
-      "context": ["meetingSidePanel", "meetingChatTab", "meetingDetailsTab"]
+      "scopes": [
+        "groupChat"
+      ],
+      "context": [
+        "meetingSidePanel",
+        "meetingChatTab",
+        "meetingDetailsTab"
+      ]
     }
   ],
   "staticTabs": [
@@ -37,10 +43,18 @@
       "name": "实时翻译",
       "contentUrl": "https://alan765477.github.io/teams-live-translator/index.html",
       "websiteUrl": "https://alan765477.github.io/teams-live-translator/index.html",
-      "scopes": ["personal"]
+      "scopes": [
+        "personal"
+      ]
     }
   ],
-  "permissions": ["identity"],
-  "devicePermissions": ["media"],
-  "validDomains": ["alan765477.github.io"]
+  "permissions": [
+    "identity"
+  ],
+  "devicePermissions": [
+    "media"
+  ],
+  "validDomains": [
+    "alan765477.github.io"
+  ]
 }
