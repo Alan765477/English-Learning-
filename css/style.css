@@ -425,6 +425,19 @@ html, body {
 .sheet-check { color: var(--primary); font-size: 17px; font-weight: 700; }
 .sheet-divider { font-size: 13px; font-weight: 600; color: var(--text-dim); margin: 20px 0 12px; }
 
+/* Tap-a-word → vocab shortcut */
+.add-word {
+  background: var(--primary-soft); color: var(--primary);
+  border: none; border-radius: 980px; padding: 6px 14px;
+  font-size: 13px; font-weight: 600;
+}
+
+/* Recap (今日纠错) */
+.recap-item { padding: 12px 4px; border-bottom: 0.5px solid var(--separator); }
+.recap-user { font-size: 14px; color: var(--text-dim); }
+.recap-corr { font-size: 15px; margin-top: 4px; line-height: 1.5; }
+.recap-empty { color: var(--text-dim); font-size: 14px; text-align: center; padding: 24px 0; }
+
 /* Lesson import */
 .import-btn { width: 100%; margin-top: 12px; }
 .sheet .btn-primary { width: 100%; }

@@ -39,8 +39,13 @@ const Vocab = {
     const word = input.value.trim();
     if (!word) return;
     input.value = '';
+    this.addWithGloss(word);
+  },
+
+  // Add a word and auto-translate its gloss when AI is connected. Also used
+  // by the practice screen's tap-a-word shortcut.
+  async addWithGloss(word) {
     this.addWord(word);
-    // Try to auto-translate the gloss.
     if (AI.configured()) {
       try {
         const zh = await AI.translate(word);
