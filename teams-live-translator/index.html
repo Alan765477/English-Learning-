@@ -103,6 +103,10 @@
   <button class="chip" data-dir="zh2en">中文→英语 我来说</button>
 </div>
 
+<div class="chips" id="ti-extra">
+  <button class="chip" id="ti-speak">🔈 朗读翻译</button>
+</div>
+
 <div id="ti-scroll"><div id="ti-list"></div></div>
 
 <div id="ti-interim">
@@ -138,6 +142,11 @@
     <input id="set-api-key" type="password" placeholder="sk-...">
   </div>
 
+  <div class="group">
+    <label>朗读输出设备（选虚拟声卡如 CABLE Input，可把翻译语音送进会议；默认走扬声器）</label>
+    <select id="set-tts-sink"><option value="">默认扬声器</option></select>
+  </div>
+
   <div class="save-row">
     <button id="ti-set-save" class="btn">保存</button>
     <button id="ti-set-close" class="btn ghost">取消</button>
@@ -165,7 +174,7 @@
 // Settings — localStorage only; keys never leave this browser.
 const Store = {
   KEY: 'tlt_settings_v1',
-  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '' },
+  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '' },
   _cache: null,
   load() {
     if (this._cache) return this._cache;
@@ -225,6 +234,96 @@ const AI = {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     return (data.content || []).map(c => c.text || '').join('').trim();
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Voice output: read each finished translation aloud. Azure neural TTS when
+// configured (human-like, and its <audio> element can be routed to a chosen
+// output device — e.g. a virtual audio cable feeding the Teams microphone);
+// otherwise the browser voice (default device only). Sentences play through
+// a sequential queue so they never overlap.
+const TTS = {
+  enabled: false,
+  queue: Promise.resolve(),
+  el: null,
+  VOICES: { en: 'en-US-AvaMultilingualNeural', zh: 'zh-CN-XiaoxiaoNeural' },
+
+  _audio() {
+    if (!this.el) this.el = new Audio();
+    return this.el;
+  },
+
+  async applySink() {
+    const id = Store.get('ttsSink');
+    const a = this._audio();
+    if (a.setSinkId) {
+      try { await a.setSinkId(id || ''); } catch {}
+    }
+  },
+
+  speak(text, lang) {
+    if (!this.enabled || !text) return;
+    this.queue = this.queue.then(() => this._speak(text, lang)).catch(() => {});
+  },
+
+  async _speak(text, lang) {
+    if (!this.enabled) return; // toggled off while queued
+    if (Store.get('azureKey') && Store.get('azureRegion')) {
+      try { await this._azure(text, lang); return; } catch {}
+    }
+    await this._browser(text, lang);
+  },
+
+  _escape(s) {
+    return s.replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
+  },
+
+  async _azure(text, lang) {
+    const key = (Store.get('azureKey') || '').replace(/\s+/g, '');
+    const region = (Store.get('azureRegion') || '').trim().toLowerCase();
+    const voice = this.VOICES[lang] || this.VOICES.en;
+    const ssml = `<speak version='1.0' xml:lang='en-US'><voice name='${voice}'>` +
+      `${this._escape(text)}</voice></speak>`;
+    const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+      method: 'POST',
+      headers: {
+        'Ocp-Apim-Subscription-Key': key,
+        'Content-Type': 'application/ssml+xml',
+        'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
+      },
+      body: ssml,
+    });
+    if (!res.ok) throw new Error('tts-' + res.status);
+    const url = URL.createObjectURL(await res.blob());
+    const a = this._audio();
+    await this.applySink();
+    a.src = url;
+    await new Promise((resolve) => {
+      a.onended = resolve;
+      a.onerror = resolve;
+      a.play().catch(resolve);
+    });
+    URL.revokeObjectURL(url);
+  },
+
+  _browser(text, lang) {
+    return new Promise((resolve) => {
+      if (!('speechSynthesis' in window)) { resolve(); return; }
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = lang === 'en' ? 'en-US' : 'zh-CN';
+      const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith(u.lang.slice(0, 2)));
+      if (v) u.voice = v;
+      u.onend = resolve;
+      u.onerror = resolve;
+      speechSynthesis.speak(u);
+    });
+  },
+
+  stop() {
+    this.queue = Promise.resolve();
+    try { const a = this._audio(); a.pause(); a.src = ''; } catch {}
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
   },
 };
 
@@ -301,6 +400,18 @@ const TeamsInterp = {
         this.hint();
       };
     });
+
+    // Voice-output toggle (persisted).
+    const sp = document.getElementById('ti-speak');
+    TTS.enabled = !!Store.get('ttsOn');
+    sp.classList.toggle('on', TTS.enabled);
+    sp.onclick = () => {
+      TTS.enabled = !TTS.enabled;
+      Store.setAll({ ttsOn: TTS.enabled });
+      sp.classList.toggle('on', TTS.enabled);
+      if (!TTS.enabled) TTS.stop();
+      else this.status('已开启朗读：每句翻译完会读出来。想让对方在会议里听到，见设置里的「朗读输出设备」');
+    };
 
     document.getElementById('ti-toggle').onclick = () => this.toggle();
     document.getElementById('ti-clear').onclick = () => {
@@ -476,6 +587,7 @@ const TeamsInterp = {
   stop() {
     this.active = false;
     this.cleanup();
+    TTS.stop();
     const btn = document.getElementById('ti-toggle');
     btn.textContent = '▶ 开始翻译';
     btn.classList.remove('recording');
@@ -517,6 +629,7 @@ const TeamsInterp = {
     row.querySelector('.ti-en').textContent = en;
     list.appendChild(row);
     this.trimAndScroll(list);
+    TTS.speak(zh, this.dir === 'zh2en' ? 'en' : 'zh');
   },
 
   // Finalized sentence that still needs translating (web-speech path).
@@ -531,6 +644,7 @@ const TeamsInterp = {
     try {
       const zh = await AI.translate(en, this.dir);
       row.querySelector('.ti-zh').textContent = zh;
+      TTS.speak(zh, this.dir === 'zh2en' ? 'en' : 'zh');
     } catch {
       row.querySelector('.ti-zh').textContent = '（翻译失败，检查 Key/网络）';
     }
@@ -549,7 +663,27 @@ const TeamsInterp = {
     document.getElementById('set-azure-region').value = Store.get('azureRegion') || '';
     document.getElementById('set-provider').value = Store.get('provider') || 'claude';
     document.getElementById('set-api-key').value = Store.get('apiKey') || '';
+    this.populateSinks();
     document.getElementById('ti-settings').classList.remove('hidden');
+  },
+
+  // List audio outputs for TTS routing (labels appear once mic permission has
+  // been granted at least once; before that generic names are shown).
+  async populateSinks() {
+    const sel = document.getElementById('set-tts-sink');
+    const cur = Store.get('ttsSink') || '';
+    sel.innerHTML = '<option value="">默认扬声器</option>';
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+      const devs = await navigator.mediaDevices.enumerateDevices();
+      devs.filter(d => d.kind === 'audiooutput' && d.deviceId && d.deviceId !== 'default').forEach((d, i) => {
+        const o = document.createElement('option');
+        o.value = d.deviceId;
+        o.textContent = d.label || ('输出设备 ' + (i + 1));
+        if (d.deviceId === cur) o.selected = true;
+        sel.appendChild(o);
+      });
+    } catch {}
   },
 
   saveSettings() {
@@ -558,7 +692,9 @@ const TeamsInterp = {
       azureRegion: document.getElementById('set-azure-region').value.trim(),
       provider: document.getElementById('set-provider').value,
       apiKey: document.getElementById('set-api-key').value.trim(),
+      ttsSink: document.getElementById('set-tts-sink').value,
     });
+    TTS.applySink();
     document.getElementById('ti-settings').classList.add('hidden');
     this.hint();
   },
