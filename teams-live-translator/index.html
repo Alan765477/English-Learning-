@@ -260,6 +260,11 @@
   </div>
 
   <div class="group">
+    <label>术语表（可选：常被听错的人名/产品名/行业词，逗号分隔，识别和翻译会优先匹配）</label>
+    <input id="set-glossary" placeholder="例如：Kubernetes, 王总, OKR, Figma">
+  </div>
+
+  <div class="group">
     <label>朗读输出设备（选虚拟声卡如 CABLE Input 可把语音送进会议；默认走扬声器）</label>
     <select id="set-tts-sink"><option value="">默认扬声器</option></select>
   </div>
@@ -334,7 +339,7 @@ function toast(msg, ms = 4000) {
 // Settings — localStorage only; keys never leave this browser.
 const Store = {
   KEY: 'tlt_settings_v1',
-  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '', langThem: 'en-US', langMe: 'zh-CN' },
+  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '', langThem: 'en-US', langMe: 'zh-CN', glossary: '' },
   _cache: null,
   load() {
     if (this._cache) return this._cache;
@@ -408,7 +413,10 @@ const AI = {
   translate(text, fromLoc, toLoc) {
     const from = (LANGS[fromLoc] || LANGS['en-US']).eng;
     const to = (LANGS[toLoc] || LANGS['zh-CN']).eng;
-    const sys = `You are a translation engine. Translate the ${from} text to natural, concise ${to}. Output ONLY the translation, nothing else.`;
+    const terms = (Store.get('glossary') || '').trim();
+    const sys = `You are a translation engine. The ${from} text comes from live speech recognition and may contain mis-heard words — translate the INTENDED meaning to natural, concise ${to}.`
+      + (terms ? ` Domain terms likely to appear (prefer them when the audio seems to intend them): ${terms}.` : '')
+      + ' Output ONLY the translation, nothing else.';
     return this._oneShot(sys, text, 200);
   },
 
@@ -1092,6 +1100,15 @@ const TeamsInterp = {
     rec._engine = 'azure';
     this.recs.push(rec);
     rec.canceled = onCancel;
+    // User glossary: bias recognition toward names/jargon that generic models
+    // mis-hear (same mechanism Teams' own captions use for custom words).
+    const terms = (Store.get('glossary') || '').split(/[,，、\n]/).map(s => s.trim()).filter(Boolean);
+    if (terms.length) {
+      try {
+        const pl = SDK.PhraseListGrammar.fromRecognizer(rec);
+        terms.forEach(t => pl.addPhrase(t));
+      } catch {}
+    }
     await new Promise((resolve, reject) =>
       rec.startContinuousRecognitionAsync(resolve, (err) => reject(new Error(err || 'start-failed'))));
   },
@@ -1463,6 +1480,7 @@ const TeamsInterp = {
     document.getElementById('set-azure-region').value = Store.get('azureRegion') || '';
     document.getElementById('set-provider').value = Store.get('provider') || 'claude';
     document.getElementById('set-api-key').value = Store.get('apiKey') || '';
+    document.getElementById('set-glossary').value = Store.get('glossary') || '';
     this.populateSinks();
     document.getElementById('ti-settings').classList.remove('hidden');
   },
@@ -1492,6 +1510,7 @@ const TeamsInterp = {
       azureRegion: document.getElementById('set-azure-region').value.trim(),
       provider: document.getElementById('set-provider').value,
       apiKey: document.getElementById('set-api-key').value.trim(),
+      glossary: document.getElementById('set-glossary').value.trim(),
       ttsSink: document.getElementById('set-tts-sink').value,
     });
     TTS.applySink();
