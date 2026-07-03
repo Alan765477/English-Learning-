@@ -614,7 +614,14 @@ const ScreenRec = {
   _timer: null, _video: null,
 
   async start() {
-    const disp = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    const disp = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true,
+      systemAudio: 'include',
+      selfBrowserSurface: 'exclude',
+      surfaceSwitching: 'include',
+      monitorTypeSurfaces: 'include',
+    });
     this.streams.push(disp);
     let mic = null;
     try { mic = await navigator.mediaDevices.getUserMedia({ audio: true }); this.streams.push(mic); } catch {}
@@ -935,11 +942,11 @@ const TeamsInterp = {
       msg = `两边都是${nMe} → 转写模式：只记录原文不翻译，存档 / 纪要 / 录音照常`;
     } else if (this.dir === 'duplex') {
       msg = this.azureConfigured()
-        ? `双向：会议声音（${nThem}→${nMe}，标「对方」）+ 麦克风（${nMe}→${nThem}，标「我」）。点开始后共享屏幕/标签页并勾选「共享音频」`
+        ? `双向：会议声音（${nThem}→${nMe}，标「对方」）+ 麦克风（${nMe}→${nThem}，标「我」）。点开始后优先选 Teams 所在「标签页」（音频默认开启）`
         : '双向对话需要 Azure Speech Key → 点右上 ⚙️ 填写';
     } else if (this.source === 'system') {
       msg = this.azureConfigured()
-        ? `听${nThem}出${nMe}字幕。点开始后选「整个屏幕」或 Teams 所在标签页，并勾选「共享音频」`
+        ? `听${nThem}出${nMe}字幕。点开始后优先选 Teams 所在「标签页」（音频默认开启）；选「整个屏幕」需手动勾「共享系统音频」`
         : '会议声音模式需要 Azure Speech Key（免费额度每月 5 小时）→ 点右上 ⚙️ 填写';
     } else if (this.dir === 'me') {
       msg = `你说${nMe}，实时出${nThem}字幕（可照着读，或开启 🔈 朗读）`;
@@ -953,12 +960,20 @@ const TeamsInterp = {
 
   async captureMeetingAudio() {
     // Chrome only exposes tab/system audio alongside a video track; we drop
-    // the video immediately and keep just the audio.
-    const disp = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    // the video immediately and keep just the audio. The extra hints make the
+    // picker friendlier: offer system audio, hide this tab from the list.
+    const disp = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true,
+      systemAudio: 'include',        // show the audio checkbox for screen shares too
+      selfBrowserSurface: 'exclude', // don't list the translator tab itself
+      surfaceSwitching: 'include',
+      monitorTypeSurfaces: 'include',
+    });
     const tracks = disp.getAudioTracks();
     if (!tracks.length) {
       disp.getTracks().forEach(t => t.stop());
-      throw new Error('没拿到声音——共享时要勾选左下角「共享标签页/系统音频」，再试一次');
+      throw new Error('没拿到声音——选「标签页」时音频默认开启；选「整个屏幕」需手动勾选左下角「共享系统音频」。再试一次');
     }
     disp.getVideoTracks().forEach(t => t.stop());
     this.stream = new MediaStream(tracks);
