@@ -39,8 +39,7 @@
   header {
     display: flex; align-items: center; gap: 2px;
     padding: 12px 14px 8px;
-    background: rgba(0,0,0,.72);
-    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    background: var(--bg);
     flex-shrink: 0; z-index: 2;
   }
   header h1 { font-size: 17px; font-weight: 600; letter-spacing: -.2px; flex: 1; }
@@ -50,8 +49,9 @@
   }
   .icon-btn:active { opacity: .55; }
 
-  /* ---- Controls ---- */
+  /* ---- Controls (config rows collapse while translating) ---- */
   .controls { padding: 2px 14px 10px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+  .controls.running .seg, .controls.running .langbar { display: none; }
   .seg {
     display: flex; background: var(--seg-bg); border-radius: 9px; padding: 2px;
   }
@@ -83,8 +83,6 @@
   #ti-scroll {
     flex: 0 1 auto; max-height: 40%; overflow-y: auto; padding: 6px 16px;
     display: flex; flex-direction: column;
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
-            mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
   }
   #ti-list { margin-top: auto; }
   .ti-row { padding: 9px 0; border-bottom: .5px solid var(--hairline); }
@@ -120,8 +118,7 @@
   /* ---- Bottom bar ---- */
   footer {
     flex-shrink: 0; padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
-    background: rgba(0,0,0,.72);
-    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    background: var(--bg);
     border-top: .5px solid var(--hairline);
   }
   #ti-status { font-size: 12px; color: var(--text2); line-height: 1.5; min-height: 17px; margin-bottom: 9px; text-align: center; }
@@ -175,8 +172,7 @@
     pointer-events: none; max-width: calc(100% - 20px);
   }
   .toast {
-    background: rgba(44,44,46,.94);
-    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    background: #2f2f33;
     color: var(--text); font-size: 13px; line-height: 1.5;
     padding: 10px 14px; border-radius: 12px;
     box-shadow: 0 6px 24px rgba(0,0,0,.5);
@@ -598,13 +594,16 @@ const Recorder = {
 };
 
 // ---------------------------------------------------------------------------
-// Screen recording for post-meeting review: meeting VIDEO + meeting audio +
-// the user's mic in one webm file. When the File System Access API is
-// available the recording streams straight to disk (memory stays flat during
-// hour-long meetings); otherwise chunks are kept in memory and downloaded.
+// Screen recording for post-meeting review: meeting VIDEO with the current
+// caption BURNED IN at the bottom + meeting audio + the user's mic, all in
+// one webm file. The video is composited on a canvas so the saved recording
+// shows the subtitles even though they live in this app, not in Teams.
+// When the File System Access API is available the recording streams
+// straight to disk (memory stays flat during hour-long meetings).
 const ScreenRec = {
   active: false,
   mr: null, ctx: null, chunks: [], writable: null, streams: [],
+  _timer: null, _video: null,
 
   async start() {
     const disp = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
@@ -617,7 +616,29 @@ const ScreenRec = {
     [disp, mic].filter(s => s && s.getAudioTracks().length).forEach(s => {
       try { this.ctx.createMediaStreamSource(s).connect(dest); } catch {}
     });
-    const stream = new MediaStream([...disp.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+
+    const vt = disp.getVideoTracks()[0];
+    let videoTracks = [];
+    if (vt) {
+      const st = vt.getSettings();
+      const srcW = st.width || 1280, srcH = st.height || 720;
+      const W = Math.min(srcW, 1280);                    // cap size to keep CPU/file sane
+      const H = Math.round(W * (srcH / srcW) / 2) * 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const cctx = canvas.getContext('2d');
+      const v = document.createElement('video');
+      v.srcObject = new MediaStream([vt]);
+      v.muted = true;
+      v.playsInline = true;
+      await v.play().catch(() => {});
+      this._video = v;
+      this._timer = setInterval(() => this._draw(v, cctx, W, H), 50); // ~20fps
+      videoTracks = canvas.captureStream(20).getVideoTracks();
+      // Browser's own "stop sharing" bar ends the recording too.
+      vt.onended = () => { if (this.active) TeamsInterp.toggleScreenRec(); };
+    }
+    const stream = new MediaStream([...videoTracks, ...dest.stream.getAudioTracks()]);
     const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm';
     this.mr = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1200000, audioBitsPerSecond: 96000 });
     this.chunks = [];
@@ -626,15 +647,65 @@ const ScreenRec = {
       if (this.writable) this.writable.write(e.data).catch(() => {});
       else this.chunks.push(e.data);
     };
-    // Browser's own "stop sharing" bar ends the recording too.
-    disp.getVideoTracks()[0].onended = () => { if (this.active) TeamsInterp.toggleScreenRec(); };
     this.mr.start(2000);
     this.active = true;
+  },
+
+  // Composite one frame: meeting video + subtitle bar (current live line or
+  // the last finalized line for a few seconds).
+  _draw(v, cctx, W, H) {
+    try { cctx.drawImage(v, 0, 0, W, H); } catch { return; }
+    const cap = TeamsInterp._lastCap;
+    if (!cap || Date.now() - cap.ts > 6000 || !cap.out) return;
+    const mainSize = Math.max(18, Math.round(H * 0.045));
+    const subSize = Math.round(mainSize * 0.62);
+    const pad = Math.round(mainSize * 0.6);
+    const maxW = W - pad * 4;
+    cctx.font = `600 ${mainSize}px -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`;
+    const lines = this._wrap(cctx, cap.out, maxW).slice(0, 2);
+    cctx.font = `400 ${subSize}px -apple-system, "Segoe UI", "PingFang SC", sans-serif`;
+    const subLines = cap.src ? this._wrap(cctx, cap.src, maxW).slice(0, 1) : [];
+    const boxH = pad * 1.6 + lines.length * (mainSize * 1.35) + subLines.length * (subSize * 1.4);
+    const y0 = H - boxH - pad;
+    cctx.fillStyle = 'rgba(0,0,0,.68)';
+    const bw = maxW + pad * 2;
+    this._rrect(cctx, (W - bw) / 2, y0, bw, boxH, Math.round(pad * 0.6));
+    cctx.textAlign = 'center';
+    cctx.fillStyle = '#fff';
+    cctx.font = `600 ${mainSize}px -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`;
+    let y = y0 + pad * 0.8 + mainSize;
+    lines.forEach(l => { cctx.fillText(l, W / 2, y); y += mainSize * 1.35; });
+    cctx.fillStyle = 'rgba(255,255,255,.72)';
+    cctx.font = `400 ${subSize}px -apple-system, "Segoe UI", "PingFang SC", sans-serif`;
+    subLines.forEach(l => { cctx.fillText(l, W / 2, y); y += subSize * 1.4; });
+  },
+
+  _wrap(cctx, text, maxW) {
+    const out = [];
+    let line = '';
+    for (const ch of text) {
+      if (cctx.measureText(line + ch).width > maxW && line) { out.push(line); line = ch; }
+      else line += ch;
+    }
+    if (line) out.push(line);
+    return out;
+  },
+
+  _rrect(cctx, x, y, w, h, r) {
+    cctx.beginPath();
+    cctx.moveTo(x + r, y);
+    cctx.arcTo(x + w, y, x + w, y + h, r);
+    cctx.arcTo(x + w, y + h, x, y + h, r);
+    cctx.arcTo(x, y + h, x, y, r);
+    cctx.arcTo(x, y, x + w, y, r);
+    cctx.fill();
   },
 
   // Resolves with 'saved' (streamed to disk), a Blob (in-memory), or null.
   stop() {
     this.active = false;
+    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    if (this._video) { try { this._video.srcObject = null; } catch {} this._video = null; }
     return new Promise((resolve) => {
       const mr = this.mr;
       this.mr = null;
@@ -838,10 +909,10 @@ const TeamsInterp = {
     if (this.active) return;
     const nThem = LANGS[this.langThem()].name, nMe = LANGS[this.langMe()].name;
     let msg;
-    if (!this.azureConfigured() && !AI.configured()) {
+    if (!this.azureConfigured() && !AI.configured() && this.langThem() !== this.langMe()) {
       msg = '先点右上 ⚙️ 填写 Azure Key（推荐）或 AI Key';
     } else if (this.langThem() === this.langMe()) {
-      msg = '两边语言相同，请把「对方说 / 我说」设成不同语言';
+      msg = `两边都是${nMe} → 转写模式：只记录原文不翻译，存档 / 纪要 / 录音照常`;
     } else if (this.dir === 'duplex') {
       msg = this.azureConfigured()
         ? `双向：会议声音（${nThem}→${nMe}，标「对方」）+ 麦克风（${nMe}→${nThem}，标「我」）。点开始后共享屏幕/标签页并勾选「共享音频」`
@@ -877,11 +948,9 @@ const TeamsInterp = {
   },
 
   async start() {
-    if (this.langThem() === this.langMe()) {
-      toast('两边语言相同——请把「对方说 / 我说」设成不同语言');
-      this.status('两边语言相同，请把「对方说 / 我说」设成不同语言');
-      return;
-    }
+    // Same language on both sides = transcription-only mode (meeting notes
+    // without translation) — archive, minutes and recording all still work.
+    this.transcribing = this.langThem() === this.langMe();
     const btn = document.getElementById('ti-toggle');
     btn.textContent = '连接中…';
     const revert = () => { btn.textContent = '开始翻译'; };
@@ -899,7 +968,7 @@ const TeamsInterp = {
       } else if (this.azureConfigured()) {
         const p = this.pair();
         await this.startAzure({ stream: null, from: p.from, outLoc: p.out, who: '' });
-      } else if (this.webSpeechSupported() && AI.configured()) {
+      } else if (this.webSpeechSupported() && (AI.configured() || this.transcribing)) {
         this.startWebSpeech();
       } else {
         revert();
@@ -922,48 +991,72 @@ const TeamsInterp = {
     if (!this.session) this.session = { id: 'S' + Date.now(), startedAt: Date.now(), name: '', lines: [] };
     btn.textContent = '停止';
     btn.classList.add('recording');
+    document.querySelector('.controls').classList.add('running'); // config rows fold away mid-meeting
     this.focusIdle('正在听…');
-    toast('✅ 已开始' + (this.dir === 'duplex' ? '双向翻译' : this.source === 'system' ? '，正在听会议声音' : '，正在听麦克风'));
-    this.status(this.dir === 'duplex' ? '双向进行中：蓝=对方，绿=我'
+    const verb = this.transcribing ? '转写' : '翻译';
+    toast('✅ 已开始' + (this.dir === 'duplex' ? '双向' + verb : verb + (this.source === 'system' ? '，正在听会议声音' : '，正在听麦克风')));
+    this.status(this.dir === 'duplex' ? (this.transcribing ? '双向转写中：蓝=对方，绿=我' : '双向进行中：蓝=对方，绿=我')
       : this.source === 'system' ? '正在听会议声音…' : '正在听麦克风…');
   },
 
-  // One Azure streaming translation channel. duplex runs two of these.
+  // One Azure streaming channel. duplex runs two of these. Same language on
+  // both ends → plain speech recognition (transcription); otherwise the
+  // recognize+translate combo endpoint.
   async startAzure({ stream, from, outLoc, who }) {
     await loadSpeechSDK();
     const SDK = window.SpeechSDK;
-    const to = LANGS[outLoc].tgt;
-    const cfg = SDK.SpeechTranslationConfig.fromSubscription(
-      (Store.get('azureKey') || '').replace(/\s+/g, ''),
-      (Store.get('azureRegion') || '').trim().toLowerCase());
-    cfg.speechRecognitionLanguage = from;
-    cfg.addTargetLanguage(to);
-    // Finalize a sentence ~0.6s after the speaker pauses (default ~2s lags).
-    try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '600'); } catch {}
-    const audio = stream
-      ? SDK.AudioConfig.fromStreamInput(stream)
-      : SDK.AudioConfig.fromDefaultMicrophoneInput();
-    const rec = new SDK.TranslationRecognizer(cfg, audio);
-    rec._engine = 'azure';
-    this.recs.push(rec);
-    const outOf = (r) => { try { return r.translations.get(to) || ''; } catch { return ''; } };
-    rec.recognizing = (s, e) => {
-      if (e.result && e.result.text) this.focusLive(e.result.text, outOf(e.result), who);
-    };
-    rec.recognized = (s, e) => {
-      const r = e.result;
-      if (r && r.reason === SDK.ResultReason.TranslatedSpeech && r.text.trim()) {
-        this.focusIdle('正在听…');
-        this.addLine(r.text.trim(), outOf(r).trim(), who, outLoc);
-      }
-    };
-    rec.canceled = (s, e) => {
+    const key = (Store.get('azureKey') || '').replace(/\s+/g, '');
+    const region = (Store.get('azureRegion') || '').trim().toLowerCase();
+    const onCancel = (s, e) => {
       if (e.reason === SDK.CancellationReason.Error) {
         const detail = /401|Authentication/i.test(e.errorDetails || '') ? 'Key 或区域不对' : (e.errorDetails || '连接中断');
         this.stop();
+        toast('❌ Azure 出错：' + detail, 6000);
         this.status('Azure 出错：' + detail);
       }
     };
+    const audio = stream
+      ? SDK.AudioConfig.fromStreamInput(stream)
+      : SDK.AudioConfig.fromDefaultMicrophoneInput();
+    let rec;
+    if (from === outLoc) {
+      const cfg = SDK.SpeechConfig.fromSubscription(key, region);
+      cfg.speechRecognitionLanguage = from;
+      try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '600'); } catch {}
+      rec = new SDK.SpeechRecognizer(cfg, audio);
+      rec.recognizing = (s, e) => {
+        if (e.result && e.result.text) this.focusLive(e.result.text, '', who);
+      };
+      rec.recognized = (s, e) => {
+        const r = e.result;
+        if (r && r.reason === SDK.ResultReason.RecognizedSpeech && r.text.trim()) {
+          this.focusIdle('正在听…');
+          this.addLine(r.text.trim(), '', who, null);
+        }
+      };
+    } else {
+      const to = LANGS[outLoc].tgt;
+      const cfg = SDK.SpeechTranslationConfig.fromSubscription(key, region);
+      cfg.speechRecognitionLanguage = from;
+      cfg.addTargetLanguage(to);
+      // Finalize a sentence ~0.6s after the speaker pauses (default ~2s lags).
+      try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '600'); } catch {}
+      rec = new SDK.TranslationRecognizer(cfg, audio);
+      const outOf = (r) => { try { return r.translations.get(to) || ''; } catch { return ''; } };
+      rec.recognizing = (s, e) => {
+        if (e.result && e.result.text) this.focusLive(e.result.text, outOf(e.result), who);
+      };
+      rec.recognized = (s, e) => {
+        const r = e.result;
+        if (r && r.reason === SDK.ResultReason.TranslatedSpeech && r.text.trim()) {
+          this.focusIdle('正在听…');
+          this.addLine(r.text.trim(), outOf(r).trim(), who, outLoc);
+        }
+      };
+    }
+    rec._engine = 'azure';
+    this.recs.push(rec);
+    rec.canceled = onCancel;
     await new Promise((resolve, reject) =>
       rec.startContinuousRecognitionAsync(resolve, (err) => reject(new Error(err || 'start-failed'))));
   },
@@ -983,7 +1076,11 @@ const TeamsInterp = {
         const r = e.results[i];
         if (r.isFinal) {
           const text = r[0].transcript.trim();
-          if (text) { this.addLineAI(text); this._pending = ''; }
+          if (text) {
+            if (this.transcribing) this.addLine(text, '', '', null);
+            else this.addLineAI(text);
+            this._pending = '';
+          }
         } else {
           interimText += r[0].transcript;
         }
@@ -1003,7 +1100,11 @@ const TeamsInterp = {
     rec.onerror = () => {};
     rec.onend = () => {
       if (this._idle) { clearTimeout(this._idle); this._idle = null; }
-      if (this._pending) { this.addLineAI(this._pending); this._pending = ''; }
+      if (this._pending) {
+        if (this.transcribing) this.addLine(this._pending, '', '', null);
+        else this.addLineAI(this._pending);
+        this._pending = '';
+      }
       if (this.active) { try { rec.start(); } catch {} }
     };
     rec._engine = 'webspeech';
@@ -1019,6 +1120,7 @@ const TeamsInterp = {
     const btn = document.getElementById('ti-toggle');
     btn.textContent = '开始翻译';
     btn.classList.remove('recording');
+    document.querySelector('.controls').classList.remove('running');
     this.focusIdle('字幕会在这里出现');
     this.hint();
     this.archiveOnStop();
@@ -1126,14 +1228,25 @@ const TeamsInterp = {
   },
 
   // ---- Focus area (the sentence being spoken right now) ----
+  // Recognizers fire many partial results per second; coalesce DOM writes to
+  // one per animation frame so low-end machines don't stutter.
   focusLive(src, out, who) {
-    const box = document.getElementById('ti-focus');
-    box.classList.remove('idle');
-    const prefix = who === 'me' ? '我：' : who === 'them' ? '对方：' : '';
-    document.getElementById('ti-focus-out').textContent = out || '…';
-    document.getElementById('ti-focus-src').textContent = prefix + (src || '');
+    this._live = { src, out, who };
+    this._lastCap = { out: out || src, src: out ? src : '', ts: Date.now() }; // feeds burned-in recording subtitles
+    if (this._liveRaf) return;
+    this._liveRaf = requestAnimationFrame(() => {
+      this._liveRaf = null;
+      const l = this._live;
+      if (!l) return;
+      const box = document.getElementById('ti-focus');
+      box.classList.remove('idle');
+      const prefix = l.who === 'me' ? '我：' : l.who === 'them' ? '对方：' : '';
+      document.getElementById('ti-focus-out').textContent = l.out || l.src || '…';
+      document.getElementById('ti-focus-src').textContent = l.out ? prefix + (l.src || '') : prefix.replace('：', '');
+    });
   },
   focusIdle(msg) {
+    this._live = null;
     const box = document.getElementById('ti-focus');
     box.classList.add('idle');
     document.getElementById('ti-focus-out').textContent = msg;
@@ -1141,6 +1254,7 @@ const TeamsInterp = {
   },
 
   // ---- Finalized captions ----
+  // With no translation (transcribe mode) the source text takes the big line.
   _row(src, out, who) {
     const list = document.getElementById('ti-list');
     const row = document.createElement('div');
@@ -1152,20 +1266,24 @@ const TeamsInterp = {
       row.appendChild(tag);
     }
     const zh = document.createElement('div'); zh.className = 'ti-zh';
-    const en = document.createElement('div'); en.className = 'ti-en';
-    zh.textContent = out;
-    en.textContent = src;
-    row.appendChild(zh); row.appendChild(en);
+    zh.textContent = out || src;
+    row.appendChild(zh);
+    if (out) {
+      const en = document.createElement('div'); en.className = 'ti-en';
+      en.textContent = src;
+      row.appendChild(en);
+    }
     list.appendChild(row);
     this.trimAndScroll(list);
     return row;
   },
 
   addLine(src, out, who, outLoc) {
-    this._row(src, out || '…', who);
+    this._row(src, out, who);
     this.transcript.push({ who, src, out });
+    this._lastCap = { out: out || src, src: out ? src : '', ts: Date.now() };
     this._saveSoon();
-    TTS.speak(out, outLoc || this.pair().out);
+    if (out) TTS.speak(out, outLoc || this.pair().out);
   },
 
   async addLineAI(src) {
@@ -1253,7 +1371,7 @@ const TeamsInterp = {
       await ScreenRec.start();
       chip.classList.add('rec-on');
       chip.textContent = '🎥 录屏中';
-      toast('🎥 录屏开始：画面 + 会议声音 + 麦克风（约每小时 0.5~1GB）', 5000);
+      toast('🎥 录屏开始：画面 + 声音 + 中文字幕烧录进视频（约每小时 0.5~1GB）', 5000);
     } catch (err) {
       if (ScreenRec.writable) { try { ScreenRec.writable.close(); } catch {} ScreenRec.writable = null; }
       toast('❌ 无法开始录屏：' + (err && err.message ? err.message : '已取消'), 6000);
