@@ -160,6 +160,14 @@
     min-height: 120px; margin-top: 10px; color: var(--text);
   }
 
+  /* ---- Archive list ---- */
+  .arch-item { background: var(--surface2); border-radius: 12px; padding: 12px 13px; margin-top: 10px; }
+  .arch-name { font-size: 15px; font-weight: 600; line-height: 1.4; }
+  .arch-meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .arch-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .arch-actions .chip { background: var(--surface); }
+  .arch-empty { color: var(--text2); font-size: 14px; margin-top: 16px; text-align: center; }
+
   /* ---- Toasts: bottom-right event notifications ---- */
   #toasts {
     position: fixed; right: 10px; bottom: calc(96px + env(safe-area-inset-bottom));
@@ -181,6 +189,7 @@
 
 <header>
   <h1>实时翻译</h1>
+  <button id="ti-archive-btn" class="icon-btn" title="存档">📂</button>
   <button id="ti-font" class="icon-btn" title="字号">Aa</button>
   <button id="ti-clear" class="icon-btn" title="清空">🗑</button>
   <button id="ti-gear" class="icon-btn" title="设置">⚙️</button>
@@ -254,6 +263,16 @@
   <div class="row">
     <button id="ti-set-save" class="btn primary">保存</button>
     <button id="ti-set-close" class="btn ghost">取消</button>
+  </div>
+</div>
+
+<!-- Archive sheet -->
+<div id="ti-archive" class="sheet hidden">
+  <h2>存档</h2>
+  <p class="sub">每次翻译的字幕自动保存在本机浏览器；结束时 AI 自动命名（未填 AI Key 则按日期命名）。</p>
+  <div id="arch-list"></div>
+  <div class="row">
+    <button id="arch-close" class="btn ghost">关闭</button>
   </div>
 </div>
 
@@ -391,6 +410,61 @@ const AI = {
 
   minutes(transcriptText) {
     return this._oneShot(this.MINUTES_SYS, transcriptText, 1500);
+  },
+
+  // Short content-based title for the session archive.
+  async title(transcriptText) {
+    const raw = await this._oneShot(
+      '为这段会议/通话字幕起一个简洁的中文标题，不超过12个字，概括主题（如「Q3预算讨论」「和客户对齐交付时间」）。只输出标题本身，不要引号和其他文字。',
+      transcriptText.slice(0, 4000), 60);
+    return raw.replace(/["「」『』'']/g, '').split('\n')[0].trim().slice(0, 20);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Session archive — every translated line is saved to IndexedDB on this
+// device as it arrives (nothing uploaded). When a session ends, the LLM
+// names it from the content; without an AI key it's named by date.
+const Archive = {
+  db: null,
+  supported() { return !!window.indexedDB; },
+  open() {
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((resolve, reject) => {
+      const r = indexedDB.open('tlt_archive', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('sessions', { keyPath: 'id' });
+      r.onsuccess = () => { this.db = r.result; resolve(this.db); };
+      r.onerror = () => reject(r.error);
+    });
+  },
+  async put(session) {
+    if (!this.supported()) return;
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const t = db.transaction('sessions', 'readwrite');
+      t.objectStore('sessions').put(session);
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
+  },
+  async all() {
+    if (!this.supported()) return [];
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const q = db.transaction('sessions').objectStore('sessions').getAll();
+      q.onsuccess = () => resolve((q.result || []).sort((a, b) => b.startedAt - a.startedAt));
+      q.onerror = () => reject(q.error);
+    });
+  },
+  async del(id) {
+    if (!this.supported()) return;
+    const db = await this.open();
+    return new Promise((resolve, reject) => {
+      const t = db.transaction('sessions', 'readwrite');
+      t.objectStore('sessions').delete(id);
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
   },
 };
 
@@ -607,6 +681,7 @@ const TeamsInterp = {
   recs: [],           // running recognizers (browser SR or Azure)
   stream: null,       // captured meeting-audio stream
   transcript: [],     // {who, src, out} — feeds the minutes generator
+  session: null,      // current archive session {id, startedAt, name, lines}
   fontIdx: 1,
   FONTS: ['cap-s', 'cap-m', 'cap-l'],
 
@@ -696,9 +771,10 @@ const TeamsInterp = {
     }
     document.getElementById('ti-minutes').onclick = () => this.makeMinutes();
     document.getElementById('minutes-transcript').onclick = () => {
-      if (!this.transcript.length) { toast('还没有字幕内容'); return; }
+      const lines = this._minutesLines || this.transcript;
+      if (!lines.length) { toast('还没有字幕内容'); return; }
       const name = 'meeting-transcript-' + this.stamp() + '.txt';
-      this.download(new Blob([this.transcriptText()], { type: 'text/plain' }), name);
+      this.download(new Blob([this.transcriptText(lines)], { type: 'text/plain' }), name);
       toast('✅ 字幕已保存到浏览器「下载」：' + name, 5000);
     };
     document.getElementById('minutes-close').onclick = () => document.getElementById('ti-minutes-sheet').classList.add('hidden');
@@ -715,9 +791,14 @@ const TeamsInterp = {
 
     document.getElementById('ti-toggle').onclick = () => this.toggle();
     document.getElementById('ti-clear').onclick = () => {
+      this.saveSession(); // keep the archived copy before clearing the screen
       document.getElementById('ti-list').innerHTML = '';
       this.transcript = [];
+      this.session = null; // next start opens a fresh session
     };
+
+    document.getElementById('ti-archive-btn').onclick = () => this.openArchive();
+    document.getElementById('arch-close').onclick = () => document.getElementById('ti-archive').classList.add('hidden');
     document.getElementById('ti-font').onclick = () => {
       this.fontIdx = (this.fontIdx + 1) % this.FONTS.length;
       const list = document.getElementById('ti-list');
@@ -836,6 +917,9 @@ const TeamsInterp = {
       return;
     }
     this.active = true;
+    // One archive session per conversation: reused across pause/resume until
+    // the screen is cleared or the page reloads.
+    if (!this.session) this.session = { id: 'S' + Date.now(), startedAt: Date.now(), name: '', lines: [] };
     btn.textContent = '停止';
     btn.classList.add('recording');
     this.focusIdle('正在听…');
@@ -937,6 +1021,91 @@ const TeamsInterp = {
     btn.classList.remove('recording');
     this.focusIdle('字幕会在这里出现');
     this.hint();
+    this.archiveOnStop();
+  },
+
+  // ---- Session archive ----
+  _saveSoon() {
+    if (!this.session) return;
+    clearTimeout(this._saveT);
+    this._saveT = setTimeout(() => this.saveSession(), 2000);
+  },
+
+  async saveSession() {
+    if (!this.session || !this.transcript.length) return;
+    try {
+      await Archive.put({ ...this.session, lines: [...this.transcript] });
+    } catch {}
+  },
+
+  // Finalize on stop: persist, then have the LLM name the session once.
+  async archiveOnStop() {
+    const s = this.session;
+    if (!s || !this.transcript.length) return;
+    await this.saveSession();
+    if (s.name) return;
+    let name = '';
+    if (AI.configured()) {
+      try { name = await AI.title(this.transcriptText()); } catch {}
+    }
+    s.name = name || '未命名会议';
+    await this.saveSession();
+    toast('📂 已自动存档：「' + s.name + '」 ' + this.fmtDate(s.startedAt), 6000);
+  },
+
+  async openArchive() {
+    const listEl = document.getElementById('arch-list');
+    listEl.innerHTML = '';
+    document.getElementById('ti-archive').classList.remove('hidden');
+    let sessions = [];
+    try { sessions = await Archive.all(); } catch {}
+    if (!sessions.length) {
+      listEl.innerHTML = '<div class="arch-empty">还没有存档——开始一次翻译后会自动出现</div>';
+      return;
+    }
+    sessions.forEach(s => {
+      const item = document.createElement('div');
+      item.className = 'arch-item';
+      const name = document.createElement('div');
+      name.className = 'arch-name';
+      name.textContent = s.name || '未命名会议';
+      const meta = document.createElement('div');
+      meta.className = 'arch-meta';
+      meta.textContent = this.fmtDate(s.startedAt) + ' · ' + ((s.lines && s.lines.length) || 0) + ' 句';
+      const actions = document.createElement('div');
+      actions.className = 'arch-actions';
+      const mk = (label, fn) => {
+        const b = document.createElement('button');
+        b.className = 'chip';
+        b.textContent = label;
+        b.onclick = fn;
+        actions.appendChild(b);
+      };
+      mk('⬇ 字幕', () => {
+        const nm = 'meeting-transcript-' + this.stamp(s.startedAt) + '.txt';
+        this.download(new Blob([s.name + ' · ' + this.fmtDate(s.startedAt) + '\n\n' + this.transcriptText(s.lines || [])], { type: 'text/plain' }), nm);
+        toast('✅ 字幕已保存到浏览器「下载」：' + nm, 5000);
+      });
+      mk('📝 纪要', () => {
+        document.getElementById('ti-archive').classList.add('hidden');
+        this.makeMinutes(s.lines || []);
+      });
+      mk('🗑 删除', async () => {
+        try { await Archive.del(s.id); } catch {}
+        toast('已删除「' + (s.name || '未命名会议') + '」');
+        this.openArchive();
+      });
+      item.appendChild(name);
+      item.appendChild(meta);
+      item.appendChild(actions);
+      listEl.appendChild(item);
+    });
+  },
+
+  fmtDate(ts) {
+    const d = new Date(ts);
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   },
 
   cleanup() {
@@ -995,6 +1164,7 @@ const TeamsInterp = {
   addLine(src, out, who, outLoc) {
     this._row(src, out || '…', who);
     this.transcript.push({ who, src, out });
+    this._saveSoon();
     TTS.speak(out, outLoc || this.pair().out);
   },
 
@@ -1005,6 +1175,7 @@ const TeamsInterp = {
       const out = await AI.translate(src, p.from, p.out);
       row.querySelector('.ti-zh').textContent = out;
       this.transcript.push({ who: '', src, out });
+      this._saveSoon();
       TTS.speak(out, p.out);
     } catch {
       row.querySelector('.ti-zh').textContent = '（翻译失败，检查 Key/网络）';
@@ -1089,26 +1260,27 @@ const TeamsInterp = {
     }
   },
 
-  transcriptText() {
-    return this.transcript.map(l => {
+  transcriptText(lines = this.transcript) {
+    return lines.map(l => {
       const who = l.who === 'me' ? '我' : l.who === 'them' ? '对方' : '发言';
       return who + '：' + l.src + (l.out ? '\n　　' + l.out : '');
     }).join('\n');
   },
 
   // ---- Meeting minutes ----
-  async makeMinutes() {
-    if (!this.transcript.length) { toast('还没有字幕内容——先翻译一会儿再生成纪要'); return; }
+  async makeMinutes(lines = this.transcript) {
+    if (!lines.length) { toast('还没有字幕内容——先翻译一会儿再生成纪要'); return; }
+    this._minutesLines = lines; // the 字幕 button downloads what's shown
     const sheet = document.getElementById('ti-minutes-sheet');
     const body = document.getElementById('minutes-body');
-    document.getElementById('minutes-hint').textContent = '共 ' + this.transcript.length + ' 句字幕';
+    document.getElementById('minutes-hint').textContent = '共 ' + lines.length + ' 句字幕';
     sheet.classList.remove('hidden');
     if (!AI.configured()) {
       body.textContent = '生成纪要需要 AI Key（Claude 或 DeepSeek）——点右上 ⚙️ 填写。\n\n不填 Key 也可以点「字幕」下载本次全部原文+译文。';
       return;
     }
     body.textContent = '生成中…';
-    const text = this.transcriptText();
+    const text = this.transcriptText(lines);
     try {
       body.textContent = await AI.minutes(text.slice(-24000)); // keep prompt bounded
     } catch (err) {
@@ -1126,8 +1298,8 @@ const TeamsInterp = {
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
   },
 
-  stamp() {
-    const d = new Date();
+  stamp(ts) {
+    const d = ts ? new Date(ts) : new Date();
     const p = (n) => String(n).padStart(2, '0');
     return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes());
   },
