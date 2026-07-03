@@ -270,7 +270,7 @@
   </div>
 
   <div class="row">
-    <button id="ti-set-save" class="btn primary">保存</button>
+    <button id="ti-set-save" class="btn primary">保存并测试连接</button>
     <button id="ti-set-close" class="btn ghost">取消</button>
   </div>
 </div>
@@ -432,6 +432,51 @@ const AI = {
     return raw.replace(/["「」『』'']/g, '').split('\n')[0].trim().slice(0, 20);
   },
 };
+
+// ---------------------------------------------------------------------------
+// Connection self-tests, run after saving settings. The Azure probe hits the
+// free voices-list endpoint (validates key+region, no speech quota used).
+async function testAzure() {
+  const key = (Store.get('azureKey') || '').replace(/\s+/g, '');
+  const region = (Store.get('azureRegion') || '').trim().toLowerCase();
+  if (!key || !region) return null;
+  try {
+    const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/voices/list`, {
+      headers: { 'Ocp-Apim-Subscription-Key': key },
+    });
+    if (res.ok) return { ok: true };
+    const reasons = {
+      401: 'Key 无效(401)——检查是否复制完整、有没有多余空格',
+      403: '没权限或额度用尽(403)——确认区域和 Key 是同一个资源',
+      404: '区域不存在(404)——应填 eastasia、eastus 这样的区域名',
+      429: '请求太频繁(429)——稍等几秒再试',
+    };
+    return { ok: false, msg: reasons[res.status] || ('HTTP ' + res.status) };
+  } catch {
+    return { ok: false, msg: '连不上——区域名可能拼错（如 eastasia），或网络问题' };
+  }
+}
+
+async function testAI() {
+  const key = Store.get('apiKey');
+  if (!key) return null;
+  const provider = Store.get('provider');
+  try {
+    if (provider === 'deepseek') {
+      const res = await fetch('https://api.deepseek.com/models', { headers: { 'Authorization': 'Bearer ' + key } });
+      return res.ok ? { ok: true, name: 'DeepSeek' } : { ok: false, name: 'DeepSeek', msg: 'Key 无效（HTTP ' + res.status + '）' };
+    }
+    const res = await fetch('https://api.anthropic.com/v1/models', {
+      headers: {
+        'x-api-key': key, 'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+    });
+    return res.ok ? { ok: true, name: 'Claude' } : { ok: false, name: 'Claude', msg: 'Key 无效（HTTP ' + res.status + '）——注意 MAX 订阅不能用于 API，需在控制台单独充值' };
+  } catch {
+    return { ok: false, name: provider === 'deepseek' ? 'DeepSeek' : 'Claude', msg: '连不上——检查网络' };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Session archive — every translated line is saved to IndexedDB on this
@@ -1516,6 +1561,17 @@ const TeamsInterp = {
     TTS.applySink();
     document.getElementById('ti-settings').classList.add('hidden');
     this.hint();
+    this.testConnections();
+  },
+
+  // Verify the saved keys actually work and report via toasts.
+  async testConnections() {
+    if (!this.azureConfigured() && !AI.configured()) { toast('未填写任何 Key'); return; }
+    toast('正在检测连接…', 2500);
+    const az = await testAzure();
+    if (az) toast(az.ok ? '✅ Azure 连接成功' : '❌ Azure：' + az.msg, az.ok ? 4000 : 8000);
+    const ai = await testAI();
+    if (ai) toast(ai.ok ? `✅ AI（${ai.name}）连接成功` : `❌ AI（${ai.name}）：` + ai.msg, ai.ok ? 4000 : 8000);
   },
 
   status(msg) { document.getElementById('ti-status').textContent = msg; },
