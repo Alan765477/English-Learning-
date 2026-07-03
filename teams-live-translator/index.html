@@ -78,9 +78,10 @@
     -webkit-appearance: none; appearance: none; text-align: center;
   }
 
-  /* ---- Transcript history (top, dimmed) ---- */
+  /* ---- Transcript history (top, dimmed, capped so the live caption owns
+          the center of the screen) ---- */
   #ti-scroll {
-    flex: 1; overflow-y: auto; padding: 6px 16px;
+    flex: 0 1 auto; max-height: 40%; overflow-y: auto; padding: 6px 16px;
     display: flex; flex-direction: column;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
             mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
@@ -100,9 +101,10 @@
   .cap-m .ti-zh { font-size: 17px; } .cap-m .ti-en { font-size: 12.5px; }
   .cap-l .ti-zh { font-size: 22px; font-weight: 600; } .cap-l .ti-en { font-size: 13px; }
 
-  /* ---- Focus area: the sentence being spoken NOW, front and center ---- */
+  /* ---- Focus area: the sentence being spoken NOW, vertically centered in
+          all remaining space so it sits mid-screen ---- */
   #ti-focus {
-    flex-shrink: 0; min-height: 108px;
+    flex: 1; min-height: 108px;
     display: flex; flex-direction: column; justify-content: center; align-items: center;
     text-align: center; padding: 14px 20px;
     border-top: .5px solid var(--hairline);
@@ -157,6 +159,22 @@
     font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
     min-height: 120px; margin-top: 10px; color: var(--text);
   }
+
+  /* ---- Toasts: bottom-right event notifications ---- */
+  #toasts {
+    position: fixed; right: 10px; bottom: calc(96px + env(safe-area-inset-bottom));
+    z-index: 50; display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+    pointer-events: none; max-width: calc(100% - 20px);
+  }
+  .toast {
+    background: rgba(44,44,46,.94);
+    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+    color: var(--text); font-size: 13px; line-height: 1.5;
+    padding: 10px 14px; border-radius: 12px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.5);
+    animation: toastin .25s ease;
+  }
+  @keyframes toastin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 </style>
 </head>
 <body>
@@ -203,6 +221,8 @@
   <div id="ti-status"></div>
   <button id="ti-toggle" class="btn">开始翻译</button>
 </footer>
+
+<div id="toasts"></div>
 
 <!-- Settings sheet -->
 <div id="ti-settings" class="sheet hidden">
@@ -267,6 +287,25 @@
 // Extras: per-sentence voice output (TTS), meeting audio recording
 // (mic + meeting mixed into one downloadable file), and AI meeting minutes
 // generated from the accumulated transcript.
+
+// ---------------------------------------------------------------------------
+// Bottom-right toast notifications for events that must not be missed
+// (start/stop, recordings saved, errors). The status line under the button
+// stays for persistent contextual hints.
+function toast(msg, ms = 4000) {
+  const box = document.getElementById('toasts');
+  if (!box) return;
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  box.appendChild(t);
+  while (box.children.length > 3) box.removeChild(box.firstChild);
+  setTimeout(() => {
+    t.style.transition = 'opacity .3s';
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 350);
+  }, ms);
+}
 
 // ---------------------------------------------------------------------------
 // Settings — localStorage only; keys never leave this browser.
@@ -657,19 +696,21 @@ const TeamsInterp = {
     }
     document.getElementById('ti-minutes').onclick = () => this.makeMinutes();
     document.getElementById('minutes-transcript').onclick = () => {
-      if (!this.transcript.length) { this.status('还没有字幕内容'); return; }
-      this.download(new Blob([this.transcriptText()], { type: 'text/plain' }),
-        'meeting-transcript-' + this.stamp() + '.txt');
+      if (!this.transcript.length) { toast('还没有字幕内容'); return; }
+      const name = 'meeting-transcript-' + this.stamp() + '.txt';
+      this.download(new Blob([this.transcriptText()], { type: 'text/plain' }), name);
+      toast('✅ 字幕已保存到浏览器「下载」：' + name, 5000);
     };
     document.getElementById('minutes-close').onclick = () => document.getElementById('ti-minutes-sheet').classList.add('hidden');
     document.getElementById('minutes-copy').onclick = () => {
       const t = document.getElementById('minutes-body').textContent;
-      navigator.clipboard && navigator.clipboard.writeText(t).then(() => this.status('纪要已复制')).catch(() => {});
+      navigator.clipboard && navigator.clipboard.writeText(t).then(() => toast('✅ 纪要已复制到剪贴板')).catch(() => toast('❌ 复制失败'));
       document.getElementById('ti-minutes-sheet').classList.add('hidden');
     };
     document.getElementById('minutes-dl').onclick = () => {
-      this.download(new Blob([document.getElementById('minutes-body').textContent], { type: 'text/markdown' }),
-        'meeting-minutes-' + this.stamp() + '.md');
+      const name = 'meeting-minutes-' + this.stamp() + '.md';
+      this.download(new Blob([document.getElementById('minutes-body').textContent], { type: 'text/markdown' }), name);
+      toast('✅ 纪要已保存到浏览器「下载」：' + name, 5000);
     };
 
     document.getElementById('ti-toggle').onclick = () => this.toggle();
@@ -755,15 +796,22 @@ const TeamsInterp = {
   },
 
   async start() {
-    if (this.langThem() === this.langMe()) { this.status('两边语言相同，请把「对方说 / 我说」设成不同语言'); return; }
+    if (this.langThem() === this.langMe()) {
+      toast('两边语言相同——请把「对方说 / 我说」设成不同语言');
+      this.status('两边语言相同，请把「对方说 / 我说」设成不同语言');
+      return;
+    }
+    const btn = document.getElementById('ti-toggle');
+    btn.textContent = '连接中…';
+    const revert = () => { btn.textContent = '开始翻译'; };
     try {
       if (this.dir === 'duplex') {
-        if (!this.azureConfigured()) { this.openSettings(); this.status('双向对话需要 Azure Speech Key'); return; }
+        if (!this.azureConfigured()) { revert(); this.openSettings(); toast('双向对话需要 Azure Speech Key——已打开设置'); return; }
         const meeting = await this.captureMeetingAudio();
         await this.startAzure({ stream: meeting, from: this.langThem(), outLoc: this.langMe(), who: 'them' });
         await this.startAzure({ stream: null, from: this.langMe(), outLoc: this.langThem(), who: 'me' });
       } else if (this.source === 'system') {
-        if (!this.azureConfigured()) { this.openSettings(); this.status('会议声音模式需要 Azure Speech Key'); return; }
+        if (!this.azureConfigured()) { revert(); this.openSettings(); toast('会议声音模式需要 Azure Speech Key——已打开设置'); return; }
         const meeting = await this.captureMeetingAudio();
         const p = this.pair();
         await this.startAzure({ stream: meeting, from: p.from, outLoc: p.out, who: '' });
@@ -773,20 +821,25 @@ const TeamsInterp = {
       } else if (this.webSpeechSupported() && AI.configured()) {
         this.startWebSpeech();
       } else {
+        revert();
         this.openSettings();
+        toast('请先填写 Azure Key（推荐）或 AI Key——已打开设置');
         this.status('请先填写 Azure Key，或（仅麦克风模式）AI Key');
         return;
       }
     } catch (err) {
       this.cleanup();
-      this.status('启动失败：' + (err && err.message ? err.message : '请重试'));
+      revert();
+      const msg = (err && err.message) ? err.message : '请重试';
+      toast('❌ 启动失败：' + msg, 6000);
+      this.status('启动失败：' + msg);
       return;
     }
     this.active = true;
-    const btn = document.getElementById('ti-toggle');
     btn.textContent = '停止';
     btn.classList.add('recording');
     this.focusIdle('正在听…');
+    toast('✅ 已开始' + (this.dir === 'duplex' ? '双向翻译' : this.source === 'system' ? '，正在听会议声音' : '，正在听麦克风'));
     this.status(this.dir === 'duplex' ? '双向进行中：蓝=对方，绿=我'
       : this.source === 'system' ? '正在听会议声音…' : '正在听麦克风…');
   },
@@ -974,10 +1027,11 @@ const TeamsInterp = {
       chip.classList.remove('rec-on');
       chip.textContent = '⏺ 录音';
       if (blob) {
-        this.download(blob, 'meeting-recording-' + this.stamp() + '.webm');
-        this.status('录音已保存到下载');
+        const name = 'meeting-recording-' + this.stamp() + '.webm';
+        this.download(blob, name);
+        toast('✅ 录音已保存到浏览器「下载」文件夹：' + name, 6000);
       } else {
-        this.status('没有录到声音');
+        toast('⚠️ 没有录到声音');
       }
       return;
     }
@@ -989,9 +1043,9 @@ const TeamsInterp = {
       await Recorder.start([mic, this.stream]);
       chip.classList.add('rec-on');
       chip.textContent = '⏺ 录音中';
-      this.status(this.stream ? '录音中：我 + 会议声音' : '录音中：仅麦克风（先开启会议声音/双向模式可同时录对方）');
+      toast(this.stream ? '⏺ 录音开始：我 + 会议声音' : '⏺ 录音开始：仅麦克风（先开会议声音/双向模式可同时录对方）', 5000);
     } catch (err) {
-      this.status('无法开始录音：' + (err && err.message ? err.message : '麦克风权限被拒绝'));
+      toast('❌ 无法开始录音：' + (err && err.message ? err.message : '麦克风权限被拒绝'), 6000);
     }
   },
 
@@ -1002,9 +1056,12 @@ const TeamsInterp = {
       const out = await ScreenRec.stop();
       chip.classList.remove('rec-on');
       chip.textContent = '🎥 录屏';
-      if (out === 'saved') this.status('录屏已保存');
-      else if (out) { this.download(out, 'meeting-screen-' + this.stamp() + '.webm'); this.status('录屏已保存到下载'); }
-      else this.status('没有录到内容');
+      if (out === 'saved') toast('✅ 录屏已保存到你选择的位置', 6000);
+      else if (out) {
+        const name = 'meeting-screen-' + this.stamp() + '.webm';
+        this.download(out, name);
+        toast('✅ 录屏已保存到浏览器「下载」文件夹：' + name, 6000);
+      } else toast('⚠️ 没有录到内容');
       return;
     }
     try {
@@ -1025,10 +1082,10 @@ const TeamsInterp = {
       await ScreenRec.start();
       chip.classList.add('rec-on');
       chip.textContent = '🎥 录屏中';
-      this.status('录屏中：画面 + 会议声音 + 我的麦克风（约每小时 0.5~1GB）');
+      toast('🎥 录屏开始：画面 + 会议声音 + 麦克风（约每小时 0.5~1GB）', 5000);
     } catch (err) {
       if (ScreenRec.writable) { try { ScreenRec.writable.close(); } catch {} ScreenRec.writable = null; }
-      this.status('无法开始录屏：' + (err && err.message ? err.message : '已取消'));
+      toast('❌ 无法开始录屏：' + (err && err.message ? err.message : '已取消'), 6000);
     }
   },
 
@@ -1041,7 +1098,7 @@ const TeamsInterp = {
 
   // ---- Meeting minutes ----
   async makeMinutes() {
-    if (!this.transcript.length) { this.status('还没有字幕内容，先翻译一会儿再生成纪要'); return; }
+    if (!this.transcript.length) { toast('还没有字幕内容——先翻译一会儿再生成纪要'); return; }
     const sheet = document.getElementById('ti-minutes-sheet');
     const body = document.getElementById('minutes-body');
     document.getElementById('minutes-hint').textContent = '共 ' + this.transcript.length + ' 句字幕';
