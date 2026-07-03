@@ -51,7 +51,7 @@
 
   /* ---- Controls (config rows collapse while translating) ---- */
   .controls { padding: 2px 14px 10px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
-  .controls.running .seg, .controls.running .langbar { display: none; }
+  .controls.running .seg, .controls.running .langbar, .controls.running .src-row { display: none; }
   .seg {
     display: flex; background: var(--seg-bg); border-radius: 9px; padding: 2px;
   }
@@ -77,6 +77,16 @@
     border-radius: 8px; padding: 7px 8px; font-size: 13px; outline: none;
     -webkit-appearance: none; appearance: none; text-align: center;
   }
+  .langbar .swap {
+    border: none; background: var(--surface); color: var(--accent);
+    border-radius: 8px; width: 34px; padding: 7px 0; font-size: 14px;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .src-row {
+    border: none; background: none; color: var(--text2); font-size: 12.5px;
+    text-align: left; padding: 0 2px; cursor: pointer;
+  }
+  .src-row b { color: var(--text); font-weight: 600; }
 
   /* ---- Transcript history (top, dimmed, capped so the live caption owns
           the center of the screen) ---- */
@@ -198,15 +208,13 @@
     <button data-dir="duplex">双向对话</button>
   </div>
   <div class="langbar">
-    <span class="lb">对方说</span>
+    <span class="lb">对方</span>
     <select id="lang-them"></select>
-    <span class="lb">我说</span>
+    <button id="lang-swap" class="swap" title="交换语言">⇄</button>
+    <span class="lb">我</span>
     <select id="lang-me"></select>
   </div>
-  <div class="seg" id="ti-source">
-    <button class="on" data-source="system">🔊 会议声音</button>
-    <button data-source="mic">🎤 麦克风</button>
-  </div>
+  <button id="ti-source-row" class="src-row"></button>
   <div class="chips">
     <button class="chip" id="ti-speak">🔈 朗读</button>
     <button class="chip" id="ti-rec">⏺ 录音</button>
@@ -778,10 +786,21 @@ const TeamsInterp = {
         // "我来说" happens into the mic; duplex fixes its own sources.
         if (this.dir === 'me') this.setSource('mic');
         if (this.dir === 'them') this.setSource(displayOK ? 'system' : 'mic');
-        document.getElementById('ti-source').classList.toggle('hidden', this.dir === 'duplex');
+        this._renderSrc();
         this.hint();
       };
     });
+
+    // Swap the two languages (roles flip a lot mid-conversation).
+    document.getElementById('lang-swap').onclick = () => {
+      if (this.active) this.stop();
+      const t = document.getElementById('lang-them'), m = document.getElementById('lang-me');
+      const tv = t.value;
+      t.value = m.value;
+      m.value = tv;
+      Store.setAll({ langThem: t.value, langMe: m.value });
+      this.hint();
+    };
 
     // Language pickers: what THEY speak and what I speak. Everything else
     // (recognition language, translation target, TTS voice) derives from
@@ -800,25 +819,27 @@ const TeamsInterp = {
         this.hint();
       };
     });
-    document.querySelectorAll('#ti-source button').forEach(btn => {
-      btn.onclick = () => {
-        if (btn.dataset.disabled) { this.status(NO_CAPTURE_MSG); return; }
-        if (this.active) this.stop();
-        this.setSource(btn.dataset.source);
-        this.hint();
-      };
-    });
+    // Audio-source: a demoted one-line toggle, only relevant in 听对方 mode
+    // (我来说 is always the mic; duplex always uses both).
+    const srcRow = document.getElementById('ti-source-row');
+    this._renderSrc = () => {
+      srcRow.innerHTML = '声音来源：<b>' + (this.source === 'system' ? '🔊 会议声音' : '🎤 麦克风') + '</b> · 点击切换';
+      srcRow.classList.toggle('hidden', this.dir !== 'them' || !displayOK);
+    };
+    srcRow.onclick = () => {
+      if (this.active) this.stop();
+      this.setSource(this.source === 'system' ? 'mic' : 'system');
+      this.hint();
+    };
     if (!displayOK) {
-      // Phones/webviews without screen-audio capture: mic only. Keep the
-      // capture-dependent options visible but dimmed — tapping them explains
-      // why they need a desktop browser instead of silently missing.
-      ['#ti-source [data-source="system"]', '#ti-dir [data-dir="duplex"]'].forEach(sel => {
-        const b = document.querySelector(sel);
-        b.classList.add('disabled');
-        b.dataset.disabled = '1';
-      });
+      // Phones/webviews without screen-audio capture: mic only. duplex stays
+      // visible but dimmed — tapping it explains why it needs a desktop browser.
+      const b = document.querySelector('#ti-dir [data-dir="duplex"]');
+      b.classList.add('disabled');
+      b.dataset.disabled = '1';
       this.setSource('mic');
     }
+    this._renderSrc();
 
     // Voice-output toggle (persisted).
     const sp = document.getElementById('ti-speak');
@@ -888,8 +909,7 @@ const TeamsInterp = {
 
   setSource(src) {
     this.source = src;
-    document.querySelectorAll('#ti-source button').forEach(b =>
-      b.classList.toggle('on', b.dataset.source === src));
+    if (this._renderSrc) this._renderSrc();
   },
 
   azureConfigured() { return !!(Store.get('azureKey') && Store.get('azureRegion')); },
