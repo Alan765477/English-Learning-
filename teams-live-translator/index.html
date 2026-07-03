@@ -61,6 +61,7 @@
     white-space: nowrap; transition: background .15s;
   }
   .seg button.on { background: var(--seg-on); box-shadow: 0 1px 3px rgba(0,0,0,.4); font-weight: 600; }
+  .seg button.disabled, .chip.disabled { opacity: .38; }
   .chips { display: flex; gap: 8px; flex-wrap: wrap; }
   .chip {
     border: none; background: var(--surface); color: var(--text2);
@@ -581,8 +582,10 @@ const TeamsInterp = {
 
     const displayOK = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
 
+    const NO_CAPTURE_MSG = '手机/此环境不支持捕获会议声音——请在电脑的 Edge 或 Chrome 浏览器打开本页使用（网址不变）';
     document.querySelectorAll('#ti-dir button').forEach(btn => {
       btn.onclick = () => {
+        if (btn.dataset.disabled) { this.status(NO_CAPTURE_MSG); return; }
         if (this.active) this.stop();
         this.dir = btn.dataset.dir;
         document.querySelectorAll('#ti-dir button').forEach(b => b.classList.remove('on'));
@@ -614,15 +617,21 @@ const TeamsInterp = {
     });
     document.querySelectorAll('#ti-source button').forEach(btn => {
       btn.onclick = () => {
+        if (btn.dataset.disabled) { this.status(NO_CAPTURE_MSG); return; }
         if (this.active) this.stop();
         this.setSource(btn.dataset.source);
         this.hint();
       };
     });
     if (!displayOK) {
-      // Phones/webviews without screen-audio capture: mic only, no duplex.
-      document.querySelector('#ti-source [data-source="system"]').classList.add('hidden');
-      document.querySelector('#ti-dir [data-dir="duplex"]').classList.add('hidden');
+      // Phones/webviews without screen-audio capture: mic only. Keep the
+      // capture-dependent options visible but dimmed — tapping them explains
+      // why they need a desktop browser instead of silently missing.
+      ['#ti-source [data-source="system"]', '#ti-dir [data-dir="duplex"]'].forEach(sel => {
+        const b = document.querySelector(sel);
+        b.classList.add('disabled');
+        b.dataset.disabled = '1';
+      });
       this.setSource('mic');
     }
 
@@ -639,8 +648,13 @@ const TeamsInterp = {
     };
 
     document.getElementById('ti-rec').onclick = () => this.toggleRecord();
-    document.getElementById('ti-screen').onclick = () => this.toggleScreenRec();
-    if (!displayOK) document.getElementById('ti-screen').classList.add('hidden');
+    const screenChip = document.getElementById('ti-screen');
+    if (displayOK) {
+      screenChip.onclick = () => this.toggleScreenRec();
+    } else {
+      screenChip.classList.add('disabled');
+      screenChip.onclick = () => this.status(NO_CAPTURE_MSG);
+    }
     document.getElementById('ti-minutes').onclick = () => this.makeMinutes();
     document.getElementById('minutes-transcript').onclick = () => {
       if (!this.transcript.length) { this.status('还没有字幕内容'); return; }
