@@ -264,6 +264,10 @@
       <input id="set-mixed" type="checkbox" style="width:auto">
       <span>中英混合识别（说话中英夹杂时开启：自动识别语言，修正「lead 听成美丽」这类问题。需 Azure Key + AI Key）</span>
     </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px">
+      <input id="set-correct" type="checkbox" style="width:auto">
+      <span>AI 校正（用术语表+上下文纠正识别错误：修同音字「电子件/电子键」、拆开黏连的缩写「CARPC DCC」。更准，但每句慢约 1 秒。需 AI Key）</span>
+    </label>
   </div>
 
   <div class="group">
@@ -351,7 +355,7 @@ function toast(msg, ms = 4000) {
 // Settings — localStorage only; keys never leave this browser.
 const Store = {
   KEY: 'tlt_settings_v1',
-  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '', langThem: 'en-US', langMe: 'zh-CN', glossary: '', mixedLang: false },
+  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '', langThem: 'en-US', langMe: 'zh-CN', glossary: '', mixedLang: false, aiCorrect: false },
   _cache: null,
   load() {
     if (this._cache) return this._cache;
@@ -440,6 +444,28 @@ const AI = {
       + (terms ? ` Domain terms likely to appear (prefer them when the audio seems to intend them): ${terms}.` : '')
       + ' Output ONLY the translation, nothing else.';
     return this._oneShot(sys, text, 200);
+  },
+
+  // Correct ASR errors using glossary + recent context, then translate — one
+  // call returns both the cleaned source and its translation. This is how we
+  // approximate the context that enterprise systems (Teams) feed their engine.
+  async correctTranslate(text, toLoc, context) {
+    const to = (LANGS[toLoc] || LANGS['zh-CN']).eng;
+    const terms = (Store.get('glossary') || '').trim();
+    const sys = 'You clean up one utterance of live meeting speech-recognition output, then translate it. '
+      + 'The recognized text may contain errors: homophones (e.g. Chinese 件/键), wrong word boundaries, and merged or split acronyms. '
+      + `Using the domain terms and recent context, FIRST fix the recognized text (correct homophones, separate merged acronyms like "CARPCDCC"→"CAR PC DCC", restore intended technical terms) WITHOUT adding or removing meaning, THEN translate the corrected text into natural, concise ${to}.`
+      + (terms ? ` Domain terms (prefer these when the audio seems to intend them): ${terms}.` : '')
+      + (context ? ` Recent context for reference only, do NOT translate it: ${context}` : '')
+      + ` Reply as compact JSON only: {"fixed":"corrected source text","out":"${to} translation"}`;
+    const raw = await this._oneShot(sys, text, 320);
+    try {
+      const m = raw.match(/\{[\s\S]*\}/);
+      const o = JSON.parse(m ? m[0] : raw);
+      return { fixed: (o.fixed || text).trim(), out: (o.out || '').trim() };
+    } catch {
+      return { fixed: text, out: raw.trim() };
+    }
   },
 
   // Translate possibly mixed-language / unknown-source text into one target.
@@ -1051,9 +1077,10 @@ const TeamsInterp = {
     } else {
       msg = `麦克风听${nThem}出${nMe}字幕：外放开会或现场会议时使用（戴耳机收不到对方声音）`;
     }
-    if (Store.get('mixedLang')) {
-      msg = (this.azureConfigured() ? '🈺 中英混合识别已开启。' : '⚠️ 中英混合识别需 Azure Key，当前会用普通识别。') + msg;
-    }
+    const tags = [];
+    if (Store.get('mixedLang')) tags.push(this.azureConfigured() ? '🈺 中英混合' : '⚠️ 混合识别需 Azure Key');
+    if (Store.get('aiCorrect')) tags.push(AI.configured() ? '✍️ AI校正' : '⚠️ AI校正需 AI Key');
+    if (tags.length) msg = tags.join(' · ') + '｜' + msg;
     this.status(msg);
   },
 
@@ -1155,20 +1182,26 @@ const TeamsInterp = {
       ? SDK.AudioConfig.fromStreamInput(stream)
       : SDK.AudioConfig.fromDefaultMicrophoneInput();
     const mixed = !!Store.get('mixedLang');
+    const correct = !!Store.get('aiCorrect') && AI.configured();
+    const useLLM = mixed || correct; // recognize with Azure, then let the LLM fix/translate
     let rec;
-    if (mixed) {
-      // Continuous language identification: the engine switches between the
-      // candidate languages sentence by sentence, so English words inside
-      // Chinese speech are recognized as English (fixes "lead"→"美丽").
-      // Recognized text is then translated to the target by the LLM.
+    if (useLLM) {
+      // Recognize only (no Azure translation); the LLM does correct+translate.
+      // mixed → continuous language ID so English words inside Chinese speech
+      // are recognized as English (fixes "lead"→"美丽").
       const cfg = SDK.SpeechConfig.fromSubscription(key, region);
-      try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_LanguageIdMode, 'Continuous'); } catch {}
       try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '600'); } catch {}
-      const candidates = [...new Set([this.langThem(), this.langMe(), 'en-US', 'zh-CN'])].slice(0, 4);
-      const auto = SDK.AutoDetectSourceLanguageConfig.fromLanguages(candidates);
-      rec = SDK.SpeechRecognizer.FromConfig
-        ? SDK.SpeechRecognizer.FromConfig(cfg, auto, audio)
-        : new SDK.SpeechRecognizer(cfg, auto, audio);
+      if (mixed) {
+        try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_LanguageIdMode, 'Continuous'); } catch {}
+        const candidates = [...new Set([this.langThem(), this.langMe(), 'en-US', 'zh-CN'])].slice(0, 4);
+        const auto = SDK.AutoDetectSourceLanguageConfig.fromLanguages(candidates);
+        rec = SDK.SpeechRecognizer.FromConfig
+          ? SDK.SpeechRecognizer.FromConfig(cfg, auto, audio)
+          : new SDK.SpeechRecognizer(cfg, auto, audio);
+      } else {
+        cfg.speechRecognitionLanguage = from;
+        rec = new SDK.SpeechRecognizer(cfg, audio);
+      }
       rec.recognizing = (s, e) => {
         if (e.result && e.result.text) this.focusLive(e.result.text, '', who);
       };
@@ -1176,7 +1209,7 @@ const TeamsInterp = {
         const r = e.result;
         if (r && r.reason === SDK.ResultReason.RecognizedSpeech && r.text.trim()) {
           this.focusIdle('正在听…');
-          this.addLineMixed(r.text.trim(), outLoc, who);
+          this.addLineLLM(r.text.trim(), outLoc, who);
         }
       };
     } else if (from === outLoc) {
@@ -1459,9 +1492,16 @@ const TeamsInterp = {
     const row = this._row(src, '翻译中…', '');
     const p = this.pair();
     try {
-      const out = await AI.translate(src, p.from, p.out);
+      let fixed = src, out;
+      if (Store.get('aiCorrect')) {
+        const r = await AI.correctTranslate(src, p.out, this._recentContext());
+        fixed = r.fixed; out = r.out;
+        if (fixed && fixed !== src) { const en = row.querySelector('.ti-en'); if (en) en.textContent = fixed; }
+      } else {
+        out = await AI.translate(src, p.from, p.out);
+      }
       row.querySelector('.ti-zh').textContent = out;
-      this.transcript.push({ who: '', src, out });
+      this.transcript.push({ who: '', src: fixed, out });
       this._saveSoon();
       TTS.speak(out, p.out);
     } catch {
@@ -1470,22 +1510,39 @@ const TeamsInterp = {
     this.trimAndScroll(document.getElementById('ti-list'));
   },
 
-  // Mixed-language recognition result → LLM translation to `outLoc`. Without
-  // an AI key it just records the recognized (mixed) text.
-  async addLineMixed(src, outLoc, who) {
+  // Recognized text → LLM. With AI 校正 on, the LLM fixes the recognized text
+  // (homophones, acronym boundaries) using glossary + recent context, then
+  // translates; otherwise it just translates. Without an AI key it records
+  // the raw recognized text.
+  async addLineLLM(src, outLoc, who) {
     if (!AI.configured()) { this.addLine(src, '', who, null); return; }
     const row = this._row(src, '翻译中…', who);
     try {
-      const out = await AI.translateTo(src, outLoc);
+      let fixed = src, out;
+      if (Store.get('aiCorrect')) {
+        const r = await AI.correctTranslate(src, outLoc, this._recentContext());
+        fixed = r.fixed; out = r.out;
+        if (fixed && fixed !== src) {
+          const en = row.querySelector('.ti-en');
+          if (en) en.textContent = fixed;
+        }
+      } else {
+        out = await AI.translateTo(src, outLoc);
+      }
       row.querySelector('.ti-zh').textContent = out;
-      this.transcript.push({ who, src, out });
+      this.transcript.push({ who, src: fixed, out });
       this._saveSoon();
-      this._lastCap = { out, src, ts: Date.now() };
+      this._lastCap = { out, src: fixed, ts: Date.now() };
       TTS.speak(out, outLoc);
     } catch {
       row.querySelector('.ti-zh').textContent = '（翻译失败，检查 Key/网络）';
     }
     this.trimAndScroll(document.getElementById('ti-list'));
+  },
+
+  // Last few finalized source lines, as context for AI correction.
+  _recentContext() {
+    return this.transcript.slice(-5).map(l => l.src).filter(Boolean).join(' ');
   },
 
   // Keep the DOM bounded during hour-long meetings and pin scroll to bottom.
@@ -1617,6 +1674,7 @@ const TeamsInterp = {
     document.getElementById('set-api-key').value = Store.get('apiKey') || '';
     document.getElementById('set-glossary').value = Store.get('glossary') || '';
     document.getElementById('set-mixed').checked = !!Store.get('mixedLang');
+    document.getElementById('set-correct').checked = !!Store.get('aiCorrect');
     this.populateSinks();
     document.getElementById('ti-settings').classList.remove('hidden');
   },
@@ -1648,6 +1706,7 @@ const TeamsInterp = {
       apiKey: document.getElementById('set-api-key').value.trim(),
       glossary: document.getElementById('set-glossary').value.trim(),
       mixedLang: document.getElementById('set-mixed').checked,
+      aiCorrect: document.getElementById('set-correct').checked,
       ttsSink: document.getElementById('set-tts-sink').value,
     });
     TTS.applySink();
