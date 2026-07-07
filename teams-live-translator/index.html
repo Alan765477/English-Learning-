@@ -167,6 +167,37 @@
     min-height: 120px; margin-top: 10px; color: var(--text);
   }
 
+  /* ---- iOS-style grouped settings ---- */
+  .sheet-head { display: flex; align-items: center; margin-bottom: 6px; }
+  .sheet-head h2 { flex: 1; margin: 0; }
+  .sheet-back { background: none; border: none; color: var(--accent); font-size: 16px; cursor: pointer; padding: 6px 8px 6px 0; }
+  .sheet-done { background: none; border: none; color: var(--accent); font-size: 16px; font-weight: 600; cursor: pointer; padding: 6px 0 6px 8px; }
+  .sec { font-size: 12px; color: var(--text3); letter-spacing: .4px; margin: 22px 4px 7px; text-transform: uppercase; }
+  .sec:first-of-type { margin-top: 10px; }
+  .card { background: var(--surface); border-radius: 12px; overflow: hidden; }
+  .card + .cardnote { font-size: 12px; color: var(--text2); line-height: 1.5; margin: 7px 4px 0; }
+  .r { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 46px; border-top: .5px solid var(--hairline); }
+  .r:first-child { border-top: none; }
+  .r .rmain { flex: 1; min-width: 0; }
+  .r .rt { font-size: 15px; }
+  .r .rs { font-size: 12px; color: var(--text2); margin-top: 2px; line-height: 1.4; }
+  .r.field { display: block; }
+  .r.field .rt { margin-bottom: 7px; }
+  .r.field input, .r.field select {
+    width: 100%; padding: 9px 11px; border-radius: 8px; font-size: 15px;
+    border: none; background: var(--surface2); color: var(--text); outline: none;
+  }
+  .r.nav { cursor: pointer; }
+  .r.nav .rv { font-size: 14px; color: var(--text2); }
+  .r.nav::after { content: '›'; color: var(--text3); font-size: 22px; line-height: 1; margin-left: 2px; }
+  /* iOS switch */
+  .sw { position: relative; width: 51px; height: 31px; flex-shrink: 0; display: inline-block; }
+  .sw input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+  .sw .tk { position: absolute; inset: 0; background: #39393d; border-radius: 999px; transition: background .2s; }
+  .sw .tk::after { content: ''; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .sw input:checked ~ .tk { background: var(--green); }
+  .sw input:checked ~ .tk::after { transform: translateX(20px); }
+
   /* ---- Archive list ---- */
   .arch-item { background: var(--surface2); border-radius: 12px; padding: 12px 13px; margin-top: 10px; }
   .arch-name { font-size: 15px; font-weight: 600; line-height: 1.4; }
@@ -239,65 +270,68 @@
 
 <!-- Settings sheet -->
 <div id="ti-settings" class="sheet hidden">
-  <h2>设置</h2>
-  <p class="sub">Key 只保存在本机浏览器，不会上传。推荐 Azure：支持会议声音、双向对话和流式字幕（免费额度每月 5 小时）。</p>
-
-  <div class="group">
-    <label>Azure Speech Key（portal.azure.com → 创建「语音服务」资源）</label>
-    <input id="set-azure-key" type="password" placeholder="粘贴 Key">
-    <label>Azure 区域（如 eastasia、eastus）</label>
-    <input id="set-azure-region" placeholder="eastasia">
+  <div class="sheet-head">
+    <h2>设置</h2>
+    <button id="ti-set-save" class="sheet-done">存储</button>
   </div>
 
-  <div class="group">
-    <label>AI（会议纪要必需；也是无 Azure 时麦克风模式的翻译引擎）</label>
-    <select id="set-provider">
-      <option value="claude">Claude</option>
-      <option value="deepseek">DeepSeek</option>
-    </select>
-    <label>API Key</label>
-    <input id="set-api-key" type="password" placeholder="sk-...">
+  <div class="sec">翻译服务</div>
+  <div class="card">
+    <div class="r field"><div class="rt">Azure Speech Key</div><input id="set-azure-key" type="password" placeholder="portal.azure.com → 语音服务"></div>
+    <div class="r field"><div class="rt">Azure 区域</div><input id="set-azure-region" placeholder="eastasia"></div>
+    <div class="r field"><div class="rt">AI 服务商</div><select id="set-provider"><option value="claude">Claude</option><option value="deepseek">DeepSeek</option></select></div>
+    <div class="r field"><div class="rt">AI Key</div><input id="set-api-key" type="password" placeholder="sk-..."></div>
+  </div>
+  <div class="cardnote">Key 只存在本机浏览器，不上传。Azure 免费额度每月 5 小时；AI Key 用于纪要、校正、翻译。</div>
+
+  <div class="sec">识别与准确度</div>
+  <div class="card">
+    <div class="r"><div class="rmain"><div class="rt">中英混合识别</div><div class="rs">说话中英夹杂时开启，自动识别语言</div></div><label class="sw"><input id="set-mixed" type="checkbox"><span class="tk"></span></label></div>
+    <div class="r"><div class="rmain"><div class="rt">AI 校正</div><div class="rs">用术语库+上下文纠正识别错误，更准但每句慢约 1 秒</div></div><label class="sw"><input id="set-correct" type="checkbox"><span class="tk"></span></label></div>
+    <div class="r nav" id="open-glossary"><div class="rmain"><div class="rt">术语库</div><div class="rs">同事名/产品名/专业词，填了才认得出</div></div><span class="rv" id="gloss-count">0 词</span></div>
   </div>
 
-  <div class="group">
-    <label style="display:flex;align-items:center;gap:8px;margin-top:0">
-      <input id="set-mixed" type="checkbox" style="width:auto">
-      <span>中英混合识别（说话中英夹杂时开启：自动识别语言，修正「lead 听成美丽」这类问题。需 Azure Key + AI Key）</span>
-    </label>
-    <label style="display:flex;align-items:center;gap:8px;margin-top:12px">
-      <input id="set-correct" type="checkbox" style="width:auto">
-      <span>AI 校正（用术语表+上下文纠正识别错误：修同音字「电子件/电子键」、拆开黏连的缩写「CARPC DCC」。更准，但每句慢约 1 秒。需 AI Key）</span>
-    </label>
+  <div class="sec">语音输出</div>
+  <div class="card">
+    <div class="r field"><div class="rt">朗读输出设备</div><select id="set-tts-sink"><option value="">默认扬声器</option></select></div>
+  </div>
+  <div class="cardnote">选虚拟声卡（如 CABLE Input）可把朗读语音送进会议；默认走扬声器。</div>
+
+  <div class="row" style="margin-top:22px">
+    <button id="ti-set-close" class="btn ghost" style="width:100%">完成</button>
+  </div>
+</div>
+
+<!-- Glossary sub-sheet -->
+<div id="ti-glossary" class="sheet hidden">
+  <div class="sheet-head">
+    <button id="gloss-back" class="sheet-back">‹ 设置</button>
+    <h2 style="font-size:17px">术语库</h2>
+    <button id="gloss-done" class="sheet-done">存储</button>
+  </div>
+  <p class="sub">把同事英文名、产品名、行业词、标准填进来——像 Teams 读通讯录一样，填了才认得出。</p>
+
+  <div class="sec">智能添加</div>
+  <div class="card">
+    <div class="r nav" id="gloss-import"><div class="rmain"><div class="rt">📄 导入文件</div><div class="rs">选一个 .txt/.csv/.md 文件，自动读取并提取术语</div></div></div>
+    <div class="r nav" id="gloss-paste"><div class="rmain"><div class="rt">📋 粘贴资料提取</div><div class="rs">粘名单/规格书/邮件，AI 自动挑词</div></div></div>
+    <div class="r nav" id="gloss-from-transcript"><div class="rmain"><div class="rt">📝 从本次字幕提取</div><div class="rs">开完会一键沉淀这次出现的专业词</div></div></div>
+  </div>
+  <div class="chips" style="margin-top:10px">
+    <button type="button" class="chip pack" data-pack="auto">＋汽车/整车</button>
+    <button type="button" class="chip pack" data-pack="std">＋机械/标准</button>
+    <button type="button" class="chip pack" data-pack="elec">＋电子/PCBA</button>
+    <button type="button" class="chip pack" data-pack="biz">＋通用商务</button>
   </div>
 
-  <div class="group">
-    <label>术语表（重要：把同事英文名、产品名、行业词、标准都填进来——像 Teams 读通讯录一样，填了才认得出。逗号分隔）</label>
-    <textarea id="set-glossary" rows="3" placeholder="例如：JACK HU, reliability, Tesla, ASME, GD&amp;T, lead time, 交样" style="width:100%;padding:11px 12px;border-radius:10px;font-size:14px;border:none;background:var(--surface2);color:var(--text);outline:none;resize:vertical"></textarea>
-    <div class="chips" style="margin-top:8px">
-      <button type="button" class="chip pack" data-pack="auto">＋汽车/整车</button>
-      <button type="button" class="chip pack" data-pack="std">＋机械/标准</button>
-      <button type="button" class="chip pack" data-pack="elec">＋电子/PCBA</button>
-      <button type="button" class="chip pack" data-pack="biz">＋通用商务</button>
-    </div>
-    <button type="button" id="gloss-extract-toggle" class="chip" style="margin-top:10px;background:rgba(10,132,255,.22);color:var(--accent)">✨ 智能提取术语（粘贴资料 / 用本次字幕，AI 自动挑词）</button>
-    <div id="gloss-extract" class="hidden" style="margin-top:8px">
-      <textarea id="extract-src" rows="4" placeholder="把任何现成资料粘进来：参会名单、规格书、BOM 表、邮件、微信群名片…… AI 会自动挑出人名、产品名、缩写、专业词，加进上面的术语表。" style="width:100%;padding:11px 12px;border-radius:10px;font-size:14px;border:none;background:var(--surface2);color:var(--text);outline:none;resize:vertical"></textarea>
-      <div class="chips" style="margin-top:6px">
-        <button type="button" id="extract-run" class="chip">从上面文本提取</button>
-        <button type="button" id="extract-transcript" class="chip">用本次字幕提取</button>
-      </div>
-    </div>
+  <div id="gloss-paste-box" class="hidden" style="margin-top:10px">
+    <textarea id="extract-src" rows="4" placeholder="把任何现成资料粘进来：参会名单、规格书、BOM 表、邮件…… AI 会挑出人名、产品名、缩写、专业词。" style="width:100%;padding:11px 12px;border-radius:10px;font-size:14px;border:none;background:var(--surface2);color:var(--text);outline:none;resize:vertical"></textarea>
+    <button type="button" id="extract-run" class="chip" style="margin-top:6px;background:rgba(10,132,255,.22);color:var(--accent)">提取并加入</button>
   </div>
 
-  <div class="group">
-    <label>朗读输出设备（选虚拟声卡如 CABLE Input 可把语音送进会议；默认走扬声器）</label>
-    <select id="set-tts-sink"><option value="">默认扬声器</option></select>
-  </div>
-
-  <div class="row">
-    <button id="ti-set-save" class="btn primary">保存并测试连接</button>
-    <button id="ti-set-close" class="btn ghost">取消</button>
-  </div>
+  <div class="sec">全部术语</div>
+  <textarea id="set-glossary" rows="6" placeholder="例如：JACK HU, reliability, PCBA, ASME, 交样" style="width:100%;padding:11px 12px;border-radius:10px;font-size:14px;border:none;background:var(--surface);color:var(--text);outline:none;resize:vertical"></textarea>
+  <input id="gloss-file" type="file" accept=".txt,.csv,.md,.text,.tsv" style="display:none">
 </div>
 
 <!-- Archive sheet -->
@@ -1053,54 +1087,82 @@ const TeamsInterp = {
     };
 
     document.getElementById('ti-gear').onclick = () => this.openSettings();
-    document.getElementById('ti-set-close').onclick = () => {
-      document.getElementById('ti-settings').classList.add('hidden');
-    };
+    document.getElementById('ti-set-close').onclick = () => this.saveSettings();
     document.getElementById('ti-set-save').onclick = () => this.saveSettings();
 
-    // Append terms to the glossary box, skipping any already present
-    // (case-insensitive). Returns how many were newly added.
-    const appendGlossary = (terms) => {
-      const ta = document.getElementById('set-glossary');
-      const have = new Set(ta.value.split(/[,，、\n]/).map(s => s.trim().toLowerCase()).filter(Boolean));
-      const add = [];
-      terms.forEach(t => { const k = t.trim().toLowerCase(); if (t.trim() && !have.has(k)) { have.add(k); add.push(t.trim()); } });
-      if (add.length) ta.value = (ta.value.trim() ? ta.value.trim() + ', ' : '') + add.join(', ');
-      return add.length;
+    // ---- Glossary sub-sheet ----
+    document.getElementById('open-glossary').onclick = () => {
+      document.getElementById('ti-settings').classList.add('hidden');
+      document.getElementById('ti-glossary').classList.remove('hidden');
     };
+    const backToSettings = () => {
+      document.getElementById('ti-glossary').classList.add('hidden');
+      document.getElementById('ti-settings').classList.remove('hidden');
+      this.updateGlossCount();
+    };
+    document.getElementById('gloss-back').onclick = backToSettings;
+    document.getElementById('gloss-done').onclick = backToSettings;
 
     // Vocabulary-pack quick-add.
     document.querySelectorAll('.chip.pack').forEach(btn => {
       btn.onclick = () => {
-        const n = appendGlossary(VOCAB_PACKS[btn.dataset.pack] || []);
-        toast(n ? '已添加 ' + n + ' 个词，记得点「保存」' : '该词包已全部添加');
+        const n = this.appendGlossary(VOCAB_PACKS[btn.dataset.pack] || []);
+        toast(n ? '已添加 ' + n + ' 个词' : '该词包已全部添加');
       };
     });
 
-    // Smart extraction: paste any material (roster, spec, BOM, email) or use
-    // the current transcript; the LLM pulls out names/acronyms/jargon.
-    document.getElementById('gloss-extract-toggle').onclick = () => {
-      document.getElementById('gloss-extract').classList.toggle('hidden');
-    };
-    const runExtract = async (text, label) => {
-      if (!AI.configured()) { toast('智能提取需要 AI Key（Claude/DeepSeek）——先在下面填好'); return; }
-      if (!text || !text.trim()) { toast('没有可提取的内容'); return; }
-      toast('AI 正在提取术语…', 3000);
-      try {
-        const terms = await AI.extractTerms(text);
-        if (!terms.length) { toast('没提取到明显的术语'); return; }
-        const n = appendGlossary(terms);
-        toast(n ? `从${label}提取到 ${terms.length} 个词，新增 ${n} 个，记得点「保存」` : `${label}里的词已全部在术语表中`, 6000);
-      } catch {
-        toast('提取失败，检查 AI Key/网络');
-      }
-    };
+    // Smart extraction — paste / file import / current transcript.
+    document.getElementById('gloss-paste').onclick = () =>
+      document.getElementById('gloss-paste-box').classList.toggle('hidden');
     document.getElementById('extract-run').onclick = () =>
-      runExtract(document.getElementById('extract-src').value, '文本');
-    document.getElementById('extract-transcript').onclick = () =>
-      runExtract(this.transcriptText(), '本次字幕');
+      this.runExtract(document.getElementById('extract-src').value, '资料');
+    document.getElementById('gloss-from-transcript').onclick = () =>
+      this.runExtract(this.transcriptText(), '本次字幕');
+    document.getElementById('gloss-import').onclick = () =>
+      document.getElementById('gloss-file').click();
+    document.getElementById('gloss-file').onchange = (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      const rd = new FileReader();
+      rd.onload = () => this.runExtract(String(rd.result || ''), f.name);
+      rd.onerror = () => toast('读取文件失败');
+      rd.readAsText(f);
+      e.target.value = ''; // allow re-selecting the same file
+    };
 
     this.hint();
+  },
+
+  // Append terms to the glossary textarea, dedup (case-insensitive).
+  appendGlossary(terms) {
+    const ta = document.getElementById('set-glossary');
+    const have = new Set(ta.value.split(/[,，、\n]/).map(s => s.trim().toLowerCase()).filter(Boolean));
+    const add = [];
+    terms.forEach(t => { const k = String(t).trim().toLowerCase(); if (String(t).trim() && !have.has(k)) { have.add(k); add.push(String(t).trim()); } });
+    if (add.length) ta.value = (ta.value.trim() ? ta.value.trim() + ', ' : '') + add.join(', ');
+    this.updateGlossCount();
+    return add.length;
+  },
+
+  updateGlossCount() {
+    const ta = document.getElementById('set-glossary');
+    const n = ta.value.split(/[,，、\n]/).map(s => s.trim()).filter(Boolean).length;
+    const el = document.getElementById('gloss-count');
+    if (el) el.textContent = n + ' 词';
+  },
+
+  async runExtract(text, label) {
+    if (!AI.configured()) { toast('智能提取需要 AI Key（Claude/DeepSeek）——先在设置里填好'); return; }
+    if (!text || !text.trim()) { toast('没有可提取的内容'); return; }
+    toast('AI 正在从' + label + '提取术语…', 3000);
+    try {
+      const terms = await AI.extractTerms(text);
+      if (!terms.length) { toast('没提取到明显的术语'); return; }
+      const n = this.appendGlossary(terms);
+      toast(n ? `从${label}提取到 ${terms.length} 个词，新增 ${n} 个` : `${label}里的词已全部在库中`, 6000);
+    } catch {
+      toast('提取失败，检查 AI Key/网络');
+    }
   },
 
   setSource(src) {
@@ -1740,7 +1802,9 @@ const TeamsInterp = {
     document.getElementById('set-glossary').value = Store.get('glossary') || '';
     document.getElementById('set-mixed').checked = !!Store.get('mixedLang');
     document.getElementById('set-correct').checked = !!Store.get('aiCorrect');
+    this.updateGlossCount();
     this.populateSinks();
+    document.getElementById('ti-glossary').classList.add('hidden');
     document.getElementById('ti-settings').classList.remove('hidden');
   },
 
@@ -1775,6 +1839,7 @@ const TeamsInterp = {
       ttsSink: document.getElementById('set-tts-sink').value,
     });
     TTS.applySink();
+    document.getElementById('ti-glossary').classList.add('hidden');
     document.getElementById('ti-settings').classList.add('hidden');
     this.hint();
     this.testConnections();
