@@ -104,7 +104,7 @@
   .ti-who.me   { background: rgba(48,209,88,.18);  color: var(--green); }
   .ti-who.them { background: rgba(10,132,255,.18); color: var(--accent); }
   .ti-zh { color: var(--text); line-height: 1.45; }
-  .ti-en { color: var(--text3); line-height: 1.4; margin-top: 3px; }
+  .ti-en { color: #9a9aa2; line-height: 1.4; margin-top: 3px; }
   .cap-s .ti-zh { font-size: 15px; } .cap-s .ti-en { font-size: 11.5px; }
   .cap-m .ti-zh { font-size: 17px; } .cap-m .ti-en { font-size: 12.5px; }
   .cap-l .ti-zh { font-size: 22px; font-weight: 600; } .cap-l .ti-en { font-size: 13px; }
@@ -122,7 +122,7 @@
     font-size: 24px; font-weight: 600; letter-spacing: -.3px; line-height: 1.35;
     color: var(--text); min-height: 32px;
   }
-  #ti-focus-src { font-size: 13px; color: var(--text2); margin-top: 6px; line-height: 1.4; }
+  #ti-focus-src { font-size: 14px; color: #a6a6ae; margin-top: 8px; line-height: 1.45; }
   #ti-focus.idle #ti-focus-out { color: var(--text3); font-weight: 400; font-size: 16px; }
 
   /* ---- Bottom bar ---- */
@@ -286,10 +286,23 @@
 
   <div class="sec">识别与准确度</div>
   <div class="card">
-    <div class="r"><div class="rmain"><div class="rt">中英混合识别</div><div class="rs">说话中英夹杂时开启，自动识别语言</div></div><label class="sw"><input id="set-mixed" type="checkbox"><span class="tk"></span></label></div>
-    <div class="r"><div class="rmain"><div class="rt">AI 校正</div><div class="rs">用术语库+上下文纠正识别错误，更准但每句慢约 1 秒</div></div><label class="sw"><input id="set-correct" type="checkbox"><span class="tk"></span></label></div>
+    <div class="r"><div class="rmain"><div class="rt">AI 校正</div><div class="rs">推荐常开。用术语库+上下文纠正识别错误，多数场景选它就够</div></div><label class="sw"><input id="set-correct" type="checkbox"><span class="tk"></span></label></div>
+    <div class="r"><div class="rmain"><div class="rt">中英混合识别</div><div class="rs">仅当整句频繁中英夹杂时开。纯一种语言的会议开了反而更容易错，别常开</div></div><label class="sw"><input id="set-mixed" type="checkbox"><span class="tk"></span></label></div>
     <div class="r nav" id="open-glossary"><div class="rmain"><div class="rt">术语库</div><div class="rs">同事名/产品名/专业词，填了才认得出</div></div><span class="rv" id="gloss-count">0 词</span></div>
   </div>
+
+  <div class="sec">字幕显示</div>
+  <div class="card">
+    <div class="r field">
+      <div class="rt">显示内容</div>
+      <div class="seg" id="set-capmode">
+        <button type="button" data-cap="both">中英对照</button>
+        <button type="button" data-cap="out">仅译文</button>
+        <button type="button" data-cap="src">仅原文</button>
+      </div>
+    </div>
+  </div>
+  <div class="cardnote">「中英对照」大字显示译文、下方小字显示原文；开会时也会同步烧进录屏字幕。</div>
 
   <div class="sec">语音输出</div>
   <div class="card">
@@ -400,7 +413,7 @@ function toast(msg, ms = 4000) {
 // Settings — localStorage only; keys never leave this browser.
 const Store = {
   KEY: 'tlt_settings_v1',
-  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '', langThem: 'en-US', langMe: 'zh-CN', glossary: '', mixedLang: false, aiCorrect: false },
+  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '', langThem: 'en-US', langMe: 'zh-CN', glossary: '', mixedLang: false, aiCorrect: false, capMode: 'both' },
   _cache: null,
   load() {
     if (this._cache) return this._cache;
@@ -1146,6 +1159,15 @@ const TeamsInterp = {
     document.getElementById('ti-set-close').onclick = () => this.saveSettings();
     document.getElementById('ti-set-save').onclick = () => this.saveSettings();
 
+    // Caption display mode (中英对照 / 仅译文 / 仅原文).
+    document.querySelectorAll('#set-capmode button').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('#set-capmode button').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        this._capModePick = btn.dataset.cap;
+      };
+    });
+
     // ---- Glossary sub-sheet ----
     document.getElementById('open-glossary').onclick = () => {
       document.getElementById('ti-settings').classList.add('hidden');
@@ -1615,6 +1637,17 @@ const TeamsInterp = {
     }
   },
 
+  // Subtitle display mode: 'both' (译文大字 + 原文小字), 'out', or 'src'.
+  capMode() { return Store.get('capMode') || 'both'; },
+  // Decide the big (primary) and small (secondary) line for a src/translation pair.
+  _bigSmall(src, out) {
+    if (!out) return { big: src, small: '' };            // transcription: source only
+    const m = this.capMode();
+    if (m === 'out') return { big: out, small: '' };
+    if (m === 'src') return { big: src, small: '' };
+    return { big: out, small: src };                      // both
+  },
+
   // ---- Focus area (the sentence being spoken right now) ----
   // Recognizers fire many partial results per second; coalesce DOM writes to
   // one per animation frame so low-end machines don't stutter.
@@ -1628,9 +1661,10 @@ const TeamsInterp = {
       if (!l) return;
       const box = document.getElementById('ti-focus');
       box.classList.remove('idle');
-      const prefix = l.who === 'me' ? '我：' : l.who === 'them' ? '对方：' : '';
-      document.getElementById('ti-focus-out').textContent = l.out || l.src || '…';
-      document.getElementById('ti-focus-src').textContent = l.out ? prefix + (l.src || '') : prefix.replace('：', '');
+      const prefix = l.who === 'me' ? '我' : l.who === 'them' ? '对方' : '';
+      const { big, small } = this._bigSmall(l.src, l.out);
+      document.getElementById('ti-focus-out').textContent = big || '…';
+      document.getElementById('ti-focus-src').textContent = small ? (prefix ? prefix + '：' : '') + small : prefix;
     });
   },
   focusIdle(msg) {
@@ -1653,17 +1687,27 @@ const TeamsInterp = {
       tag.textContent = who === 'me' ? '我' : '对方';
       row.appendChild(tag);
     }
-    const zh = document.createElement('div'); zh.className = 'ti-zh';
-    zh.textContent = out || src;
-    row.appendChild(zh);
-    if (out) {
-      const en = document.createElement('div'); en.className = 'ti-en';
-      en.textContent = src;
-      row.appendChild(en);
-    }
+    this._fillRow(row, src, out);
     list.appendChild(row);
     this.trimAndScroll(list);
     return row;
+  },
+
+  // (Re)render a row's text nodes per the current display mode. Used both for
+  // the initial render and to finalize async translations without assuming the
+  // big line is the translation (which breaks in 仅原文 mode).
+  _fillRow(row, src, out) {
+    const { big, small } = this._bigSmall(src, out);
+    let zh = row.querySelector('.ti-zh');
+    if (!zh) { zh = document.createElement('div'); zh.className = 'ti-zh'; row.appendChild(zh); }
+    zh.textContent = big;
+    let en = row.querySelector('.ti-en');
+    if (small) {
+      if (!en) { en = document.createElement('div'); en.className = 'ti-en'; row.appendChild(en); }
+      en.textContent = small;
+    } else if (en) {
+      en.remove();
+    }
   },
 
   addLine(src, out, who, outLoc) {
@@ -1675,23 +1719,22 @@ const TeamsInterp = {
   },
 
   async addLineAI(src) {
-    const row = this._row(src, '翻译中…', '');
+    const row = this._pendingRow(src, '');
     const p = this.pair();
     try {
       let fixed = src, out;
       if (Store.get('aiCorrect')) {
         const r = await AI.correctTranslate(src, p.out, this._recentContext());
         fixed = r.fixed; out = r.out;
-        if (fixed && fixed !== src) { const en = row.querySelector('.ti-en'); if (en) en.textContent = fixed; }
       } else {
         out = await AI.translate(src, p.from, p.out);
       }
-      row.querySelector('.ti-zh').textContent = out;
+      this._fillRow(row, fixed, out);
       this.transcript.push({ who: '', src: fixed, out });
       this._saveSoon();
       TTS.speak(out, p.out);
     } catch {
-      row.querySelector('.ti-zh').textContent = '（翻译失败，检查 Key/网络）';
+      this._fillRow(row, src, '（翻译失败，检查 Key/网络）');
     }
     this.trimAndScroll(document.getElementById('ti-list'));
   },
@@ -1702,28 +1745,44 @@ const TeamsInterp = {
   // the raw recognized text.
   async addLineLLM(src, outLoc, who) {
     if (!AI.configured()) { this.addLine(src, '', who, null); return; }
-    const row = this._row(src, '翻译中…', who);
+    const row = this._pendingRow(src, who);
     try {
       let fixed = src, out;
       if (Store.get('aiCorrect')) {
         const r = await AI.correctTranslate(src, outLoc, this._recentContext());
         fixed = r.fixed; out = r.out;
-        if (fixed && fixed !== src) {
-          const en = row.querySelector('.ti-en');
-          if (en) en.textContent = fixed;
-        }
       } else {
         out = await AI.translateTo(src, outLoc);
       }
-      row.querySelector('.ti-zh').textContent = out;
+      this._fillRow(row, fixed, out);
       this.transcript.push({ who, src: fixed, out });
       this._saveSoon();
       this._lastCap = { out, src: fixed, ts: Date.now() };
       TTS.speak(out, outLoc);
     } catch {
-      row.querySelector('.ti-zh').textContent = '（翻译失败，检查 Key/网络）';
+      this._fillRow(row, src, '（翻译失败，检查 Key/网络）');
     }
     this.trimAndScroll(document.getElementById('ti-list'));
+  },
+
+  // A row that immediately shows the recognized text with a "翻译中…" hint,
+  // to be finalized by _fillRow when the translation arrives.
+  _pendingRow(src, who) {
+    const list = document.getElementById('ti-list');
+    const row = document.createElement('div');
+    row.className = 'ti-row';
+    if (who) {
+      const tag = document.createElement('span');
+      tag.className = 'ti-who ' + who;
+      tag.textContent = who === 'me' ? '我' : '对方';
+      row.appendChild(tag);
+    }
+    const zh = document.createElement('div'); zh.className = 'ti-zh'; zh.textContent = src;
+    const en = document.createElement('div'); en.className = 'ti-en'; en.textContent = '翻译中…';
+    row.appendChild(zh); row.appendChild(en);
+    list.appendChild(row);
+    this.trimAndScroll(list);
+    return row;
   },
 
   // Last few finalized source lines, as context for AI correction.
@@ -1861,6 +1920,9 @@ const TeamsInterp = {
     document.getElementById('set-glossary').value = Store.get('glossary') || '';
     document.getElementById('set-mixed').checked = !!Store.get('mixedLang');
     document.getElementById('set-correct').checked = !!Store.get('aiCorrect');
+    this._capModePick = this.capMode();
+    document.querySelectorAll('#set-capmode button').forEach(b =>
+      b.classList.toggle('on', b.dataset.cap === this._capModePick));
     this.updateGlossCount();
     this.populateSinks();
     document.getElementById('ti-glossary').classList.add('hidden');
@@ -1895,6 +1957,7 @@ const TeamsInterp = {
       glossary: document.getElementById('set-glossary').value.trim(),
       mixedLang: document.getElementById('set-mixed').checked,
       aiCorrect: document.getElementById('set-correct').checked,
+      capMode: this._capModePick || 'both',
       ttsSink: document.getElementById('set-tts-sink').value,
     });
     TTS.applySink();
