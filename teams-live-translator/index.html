@@ -199,7 +199,7 @@
   .sw input:checked ~ .tk::after { transform: translateX(20px); }
 
   /* ---- Archive list ---- */
-  .arch-item { background: var(--surface2); border-radius: 12px; padding: 12px 13px; margin-top: 10px; }
+  .arch-item { background: var(--surface); border-radius: 12px; padding: 13px 14px; margin-top: 10px; }
   .arch-name { font-size: 15px; font-weight: 600; line-height: 1.4; }
   .arch-meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
   .arch-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
@@ -313,7 +313,7 @@
 
   <div class="sec">智能添加</div>
   <div class="card">
-    <div class="r nav" id="gloss-import"><div class="rmain"><div class="rt">📄 导入文件</div><div class="rs">选一个 .txt/.csv/.md 文件，自动读取并提取术语</div></div></div>
+    <div class="r nav" id="gloss-import"><div class="rmain"><div class="rt">📄 导入文件</div><div class="rs">PDF / Excel / PPT / Word / txt，自动读取并提取术语</div></div></div>
     <div class="r nav" id="gloss-paste"><div class="rmain"><div class="rt">📋 粘贴资料提取</div><div class="rs">粘名单/规格书/邮件，AI 自动挑词</div></div></div>
     <div class="r nav" id="gloss-from-transcript"><div class="rmain"><div class="rt">📝 从本次字幕提取</div><div class="rs">开完会一键沉淀这次出现的专业词</div></div></div>
   </div>
@@ -331,29 +331,31 @@
 
   <div class="sec">全部术语</div>
   <textarea id="set-glossary" rows="6" placeholder="例如：JACK HU, reliability, PCBA, ASME, 交样" style="width:100%;padding:11px 12px;border-radius:10px;font-size:14px;border:none;background:var(--surface);color:var(--text);outline:none;resize:vertical"></textarea>
-  <input id="gloss-file" type="file" accept=".txt,.csv,.md,.text,.tsv" style="display:none">
+  <input id="gloss-file" type="file" accept=".txt,.csv,.md,.text,.tsv,.json,.log,.vtt,.srt,.pdf,.xlsx,.pptx,.docx" style="display:none">
 </div>
 
 <!-- Archive sheet -->
 <div id="ti-archive" class="sheet hidden">
-  <h2>存档</h2>
-  <p class="sub">每次翻译的字幕自动保存在本机浏览器；结束时 AI 自动命名（未填 AI Key 则按日期命名）。</p>
-  <div id="arch-list"></div>
-  <div class="row">
-    <button id="arch-close" class="btn ghost">关闭</button>
+  <div class="sheet-head">
+    <h2>存档</h2>
+    <button id="arch-close" class="sheet-done">完成</button>
   </div>
+  <p class="sub">每次翻译的字幕自动保存在本机浏览器；结束时 AI 自动命名。</p>
+  <div id="arch-list"></div>
 </div>
 
 <!-- Minutes sheet -->
 <div id="ti-minutes-sheet" class="sheet hidden">
-  <h2>会议纪要</h2>
+  <div class="sheet-head">
+    <h2>会议纪要</h2>
+    <button id="minutes-close" class="sheet-done">完成</button>
+  </div>
   <p class="sub" id="minutes-hint">根据本次全部字幕自动整理。</p>
   <div id="minutes-body">生成中…</div>
-  <div class="row">
-    <button id="minutes-copy" class="btn primary">复制</button>
-    <button id="minutes-dl" class="btn ghost">下载</button>
-    <button id="minutes-transcript" class="btn ghost">字幕</button>
-    <button id="minutes-close" class="btn ghost">关闭</button>
+  <div class="chips" style="margin-top:14px">
+    <button id="minutes-copy" class="chip" style="background:rgba(10,132,255,.22);color:var(--accent)">复制</button>
+    <button id="minutes-dl" class="chip">下载纪要</button>
+    <button id="minutes-transcript" class="chip">下载字幕</button>
   </div>
 </div>
 
@@ -925,19 +927,73 @@ const ScreenRec = {
 };
 
 // ---------------------------------------------------------------------------
-// Azure Speech SDK, loaded from CDN only when first needed.
-let _sdkPromise = null;
-function loadSpeechSDK() {
-  if (window.SpeechSDK) return Promise.resolve();
-  if (_sdkPromise) return _sdkPromise;
-  _sdkPromise = new Promise((resolve, reject) => {
+// Load an external script once, resolving when its global is ready.
+const _scripts = {};
+function loadScript(src, globalName) {
+  if (globalName && window[globalName]) return Promise.resolve();
+  if (_scripts[src]) return _scripts[src];
+  _scripts[src] = new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js';
+    s.src = src;
     s.onload = () => resolve();
-    s.onerror = () => { _sdkPromise = null; reject(new Error('语音 SDK 加载失败，检查网络')); };
+    s.onerror = () => { delete _scripts[src]; reject(new Error('加载失败：' + src)); };
     document.head.appendChild(s);
   });
-  return _sdkPromise;
+  return _scripts[src];
+}
+function loadSpeechSDK() {
+  return loadScript('https://cdn.jsdelivr.net/npm/microsoft-cognitiveservices-speech-sdk/distrib/browser/microsoft.cognitiveservices.speech.sdk.bundle-min.js', 'SpeechSDK');
+}
+
+// ---------------------------------------------------------------------------
+// Extract plain text from an uploaded file for glossary mining. Plain-text
+// formats are read directly; PDF via pdf.js, and OOXML (xlsx/pptx/docx) by
+// unzipping with fflate and stripping the XML — libraries load on demand,
+// same pattern as the Speech SDK.
+async function readFileText(file) {
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if (['txt', 'csv', 'md', 'text', 'tsv', 'json', 'log', 'vtt', 'srt'].includes(ext)) {
+    return (await file.text()).slice(0, 40000);
+  }
+  const buf = new Uint8Array(await file.arrayBuffer());
+  if (ext === 'pdf') return readPdf(buf);
+  if (['xlsx', 'pptx', 'docx'].includes(ext)) return readOoxml(buf, ext);
+  if (['xls', 'ppt', 'doc'].includes(ext)) {
+    throw new Error('旧版 ' + ext + ' 格式不支持，请另存为 ' + ext + 'x 再导入');
+  }
+  return (await file.text()).slice(0, 40000); // best-effort
+}
+
+async function readPdf(buf) {
+  const V = '3.11.174';
+  await loadScript(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${V}/build/pdf.min.js`, 'pdfjsLib');
+  try { pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${V}/build/pdf.worker.min.js`; } catch {}
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const pages = Math.min(pdf.numPages, 40);
+  const out = [];
+  for (let i = 1; i <= pages; i++) {
+    const tc = await (await pdf.getPage(i)).getTextContent();
+    out.push(tc.items.map(it => it.str).join(' '));
+  }
+  return out.join('\n').slice(0, 40000);
+}
+
+async function readOoxml(buf, ext) {
+  await loadScript('https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js', 'fflate');
+  const files = fflate.unzipSync(buf);
+  const dec = new TextDecoder();
+  const want = ext === 'xlsx' ? /^xl\/sharedStrings\.xml$/
+    : ext === 'pptx' ? /^ppt\/slides\/slide\d+\.xml$/
+    : /^word\/document\.xml$/;
+  const parts = [];
+  Object.keys(files).forEach(name => {
+    if (!want.test(name)) return;
+    const xml = dec.decode(files[name]);
+    const txt = xml.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ').trim();
+    if (txt) parts.push(txt);
+  });
+  if (!parts.length) throw new Error('这个文件里没读到文字');
+  return parts.join('\n').slice(0, 40000);
 }
 
 // ---------------------------------------------------------------------------
@@ -1120,14 +1176,17 @@ const TeamsInterp = {
       this.runExtract(this.transcriptText(), '本次字幕');
     document.getElementById('gloss-import').onclick = () =>
       document.getElementById('gloss-file').click();
-    document.getElementById('gloss-file').onchange = (e) => {
+    document.getElementById('gloss-file').onchange = async (e) => {
       const f = e.target.files && e.target.files[0];
-      if (!f) return;
-      const rd = new FileReader();
-      rd.onload = () => this.runExtract(String(rd.result || ''), f.name);
-      rd.onerror = () => toast('读取文件失败');
-      rd.readAsText(f);
       e.target.value = ''; // allow re-selecting the same file
+      if (!f) return;
+      toast('正在读取 ' + f.name + ' …', 4000);
+      try {
+        const text = await readFileText(f);
+        await this.runExtract(text, f.name);
+      } catch (err) {
+        toast('读取失败：' + (err && err.message ? err.message : f.name), 6000);
+      }
     };
 
     this.hint();
