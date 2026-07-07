@@ -260,8 +260,20 @@
   </div>
 
   <div class="group">
-    <label>术语表（可选：常被听错的人名/产品名/行业词，逗号分隔，识别和翻译会优先匹配）</label>
-    <input id="set-glossary" placeholder="例如：Kubernetes, 王总, OKR, Figma">
+    <label style="display:flex;align-items:center;gap:8px;margin-top:0">
+      <input id="set-mixed" type="checkbox" style="width:auto">
+      <span>中英混合识别（说话中英夹杂时开启：自动识别语言，修正「lead 听成美丽」这类问题。需 Azure Key + AI Key）</span>
+    </label>
+  </div>
+
+  <div class="group">
+    <label>术语表（人名/产品名/行业词/标准，逗号分隔，识别和翻译优先匹配）</label>
+    <textarea id="set-glossary" rows="3" placeholder="例如：Tesla, ASME, GD&amp;T, lead time, 王总" style="width:100%;padding:11px 12px;border-radius:10px;font-size:14px;border:none;background:var(--surface2);color:var(--text);outline:none;resize:vertical"></textarea>
+    <div class="chips" style="margin-top:8px">
+      <button type="button" class="chip pack" data-pack="auto">＋汽车/整车工程</button>
+      <button type="button" class="chip pack" data-pack="std">＋机械/标准</button>
+      <button type="button" class="chip pack" data-pack="biz">＋通用商务</button>
+    </div>
   </div>
 
   <div class="group">
@@ -339,7 +351,7 @@ function toast(msg, ms = 4000) {
 // Settings — localStorage only; keys never leave this browser.
 const Store = {
   KEY: 'tlt_settings_v1',
-  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '', langThem: 'en-US', langMe: 'zh-CN', glossary: '' },
+  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '', langThem: 'en-US', langMe: 'zh-CN', glossary: '', mixedLang: false },
   _cache: null,
   load() {
     if (this._cache) return this._cache;
@@ -372,6 +384,16 @@ const LANGS = {
   'fr-FR': { name: 'Français', eng: 'French',             tgt: 'fr',      voice: 'fr-FR-DeniseNeural' },
   'de-DE': { name: 'Deutsch',  eng: 'German',             tgt: 'de',      voice: 'de-DE-KatjaNeural' },
   'ru-RU': { name: 'Русский',  eng: 'Russian',            tgt: 'ru',      voice: 'ru-RU-SvetlanaNeural' },
+};
+
+// ---------------------------------------------------------------------------
+// One-click domain vocabulary packs appended to the glossary. Terms bias
+// recognition (Azure phrase list) and translation. Mixed zh/en on purpose —
+// these words tend to be spoken in English inside Chinese sentences.
+const VOCAB_PACKS = {
+  auto: ['Tesla','Rivian','Lucid','BYD','NIO','powertrain','BOM','teardown','gigacasting','4680','kWh','OEM','Tier 1','takt time','lead time','powertrain','chassis','HVAC','ADAS','torque','fixture','tooling','stamping','casting','weld','wiring harness','battery pack','skateboard','e-axle','inverter','thermal management','crash test','NVH','prototype','pre-production','ramp-up','yield','throughput'],
+  std: ['ASME','ASTM','ISO','DIN','JIS','SAE','GB','ANSI','IATF 16949','ISO 9001','RoHS','REACH','GD&T','datum','tolerance','fit','clearance','interference','fillet','chamfer','Ra','Rz','micron','CMM','CNC','CAD','CAE','FEA','callout','spec','drawing','revision','PPAP','FMEA','DFMEA','APQP','MSA','SPC','Cpk'],
+  biz: ['OKR','KPI','ROI','milestone','deliverable','stakeholder','action item','follow-up','deadline','timeline','budget','forecast','Q1','Q2','Q3','Q4','roadmap','scope','sync','align','escalate','blocker','bandwidth','headcount','onboarding','offshore','vendor','RFQ','PO','SOW','NDA','MOQ','ETA'],
 };
 
 // ---------------------------------------------------------------------------
@@ -418,6 +440,16 @@ const AI = {
       + (terms ? ` Domain terms likely to appear (prefer them when the audio seems to intend them): ${terms}.` : '')
       + ' Output ONLY the translation, nothing else.';
     return this._oneShot(sys, text, 200);
+  },
+
+  // Translate possibly mixed-language / unknown-source text into one target.
+  translateTo(text, toLoc) {
+    const to = (LANGS[toLoc] || LANGS['zh-CN']).eng;
+    const terms = (Store.get('glossary') || '').trim();
+    const sys = `You are a translation engine. The input is live speech recognition of possibly MIXED-language speech (e.g. Chinese with English technical terms) and may contain mis-heard words. Render the intended meaning as natural, concise ${to}; keep proper nouns, product names, and standard/spec codes in their original form.`
+      + (terms ? ` Known domain terms (prefer these when the audio seems to intend them): ${terms}.` : '')
+      + ' Output ONLY the translation, nothing else.';
+    return this._oneShot(sys, text, 220);
   },
 
   minutes(transcriptText) {
@@ -964,6 +996,19 @@ const TeamsInterp = {
     };
     document.getElementById('ti-set-save').onclick = () => this.saveSettings();
 
+    // Vocabulary-pack quick-add: append the pack's terms to the glossary box,
+    // skipping any already present.
+    document.querySelectorAll('.chip.pack').forEach(btn => {
+      btn.onclick = () => {
+        const ta = document.getElementById('set-glossary');
+        const have = new Set(ta.value.split(/[,，、\n]/).map(s => s.trim().toLowerCase()).filter(Boolean));
+        const add = (VOCAB_PACKS[btn.dataset.pack] || []).filter(t => !have.has(t.toLowerCase()));
+        if (!add.length) { toast('该词包已全部添加'); return; }
+        ta.value = (ta.value.trim() ? ta.value.trim() + ', ' : '') + add.join(', ');
+        toast('已添加 ' + add.length + ' 个词，记得点「保存」');
+      };
+    });
+
     this.hint();
   },
 
@@ -1005,6 +1050,9 @@ const TeamsInterp = {
       msg = `你说${nMe}，实时出${nThem}字幕（可照着读，或开启 🔈 朗读）`;
     } else {
       msg = `麦克风听${nThem}出${nMe}字幕：外放开会或现场会议时使用（戴耳机收不到对方声音）`;
+    }
+    if (Store.get('mixedLang')) {
+      msg = (this.azureConfigured() ? '🈺 中英混合识别已开启。' : '⚠️ 中英混合识别需 Azure Key，当前会用普通识别。') + msg;
     }
     this.status(msg);
   },
@@ -1106,8 +1154,32 @@ const TeamsInterp = {
     const audio = stream
       ? SDK.AudioConfig.fromStreamInput(stream)
       : SDK.AudioConfig.fromDefaultMicrophoneInput();
+    const mixed = !!Store.get('mixedLang');
     let rec;
-    if (from === outLoc) {
+    if (mixed) {
+      // Continuous language identification: the engine switches between the
+      // candidate languages sentence by sentence, so English words inside
+      // Chinese speech are recognized as English (fixes "lead"→"美丽").
+      // Recognized text is then translated to the target by the LLM.
+      const cfg = SDK.SpeechConfig.fromSubscription(key, region);
+      try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_LanguageIdMode, 'Continuous'); } catch {}
+      try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '600'); } catch {}
+      const candidates = [...new Set([this.langThem(), this.langMe(), 'en-US', 'zh-CN'])].slice(0, 4);
+      const auto = SDK.AutoDetectSourceLanguageConfig.fromLanguages(candidates);
+      rec = SDK.SpeechRecognizer.FromConfig
+        ? SDK.SpeechRecognizer.FromConfig(cfg, auto, audio)
+        : new SDK.SpeechRecognizer(cfg, auto, audio);
+      rec.recognizing = (s, e) => {
+        if (e.result && e.result.text) this.focusLive(e.result.text, '', who);
+      };
+      rec.recognized = (s, e) => {
+        const r = e.result;
+        if (r && r.reason === SDK.ResultReason.RecognizedSpeech && r.text.trim()) {
+          this.focusIdle('正在听…');
+          this.addLineMixed(r.text.trim(), outLoc, who);
+        }
+      };
+    } else if (from === outLoc) {
       const cfg = SDK.SpeechConfig.fromSubscription(key, region);
       cfg.speechRecognitionLanguage = from;
       try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '600'); } catch {}
@@ -1398,6 +1470,24 @@ const TeamsInterp = {
     this.trimAndScroll(document.getElementById('ti-list'));
   },
 
+  // Mixed-language recognition result → LLM translation to `outLoc`. Without
+  // an AI key it just records the recognized (mixed) text.
+  async addLineMixed(src, outLoc, who) {
+    if (!AI.configured()) { this.addLine(src, '', who, null); return; }
+    const row = this._row(src, '翻译中…', who);
+    try {
+      const out = await AI.translateTo(src, outLoc);
+      row.querySelector('.ti-zh').textContent = out;
+      this.transcript.push({ who, src, out });
+      this._saveSoon();
+      this._lastCap = { out, src, ts: Date.now() };
+      TTS.speak(out, outLoc);
+    } catch {
+      row.querySelector('.ti-zh').textContent = '（翻译失败，检查 Key/网络）';
+    }
+    this.trimAndScroll(document.getElementById('ti-list'));
+  },
+
   // Keep the DOM bounded during hour-long meetings and pin scroll to bottom.
   trimAndScroll(list) {
     while (list.children.length > 300) list.removeChild(list.firstChild);
@@ -1526,6 +1616,7 @@ const TeamsInterp = {
     document.getElementById('set-provider').value = Store.get('provider') || 'claude';
     document.getElementById('set-api-key').value = Store.get('apiKey') || '';
     document.getElementById('set-glossary').value = Store.get('glossary') || '';
+    document.getElementById('set-mixed').checked = !!Store.get('mixedLang');
     this.populateSinks();
     document.getElementById('ti-settings').classList.remove('hidden');
   },
@@ -1556,6 +1647,7 @@ const TeamsInterp = {
       provider: document.getElementById('set-provider').value,
       apiKey: document.getElementById('set-api-key').value.trim(),
       glossary: document.getElementById('set-glossary').value.trim(),
+      mixedLang: document.getElementById('set-mixed').checked,
       ttsSink: document.getElementById('set-tts-sink').value,
     });
     TTS.applySink();
