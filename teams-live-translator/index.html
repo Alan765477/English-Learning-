@@ -271,8 +271,8 @@
   </div>
 
   <div class="group">
-    <label>术语表（人名/产品名/行业词/标准，逗号分隔，识别和翻译优先匹配）</label>
-    <textarea id="set-glossary" rows="3" placeholder="例如：Tesla, ASME, GD&amp;T, lead time, 王总" style="width:100%;padding:11px 12px;border-radius:10px;font-size:14px;border:none;background:var(--surface2);color:var(--text);outline:none;resize:vertical"></textarea>
+    <label>术语表（重要：把同事英文名、产品名、行业词、标准都填进来——像 Teams 读通讯录一样，填了才认得出。逗号分隔）</label>
+    <textarea id="set-glossary" rows="3" placeholder="例如：JACK HU, reliability, Tesla, ASME, GD&amp;T, lead time, 交样" style="width:100%;padding:11px 12px;border-radius:10px;font-size:14px;border:none;background:var(--surface2);color:var(--text);outline:none;resize:vertical"></textarea>
     <div class="chips" style="margin-top:8px">
       <button type="button" class="chip pack" data-pack="auto">＋汽车/整车工程</button>
       <button type="button" class="chip pack" data-pack="std">＋机械/标准</button>
@@ -462,7 +462,8 @@ const AI = {
       + '- A Chinese "word" that makes no sense in context is often a mis-heard ENGLISH term that sounds similar — restore the English (e.g. 利益 spoken as "lead", 麦丽 as "lead", 三普 as "sample").\n'
       + '- Separate merged acronyms/letters (CARPCDCC→CAR PC DCC) and keep product names, model numbers and standard codes intact.\n'
       + '- Only fix likely recognition errors; never add, drop, or rephrase real content. If a word is already correct, keep it.\n'
-      + `After fixing, translate the corrected sentence into natural, concise ${to}.`
+      + '- The preferred-vocabulary list below may include people\'s names, product names and jargon. If a Chinese transcription SOUNDS like one of them (e.g. 杰克胡 → "JACK HU", 瑞来 → "reliability"), replace it with the exact listed form.\n'
+      + `After fixing, translate the corrected sentence into natural, concise ${to}. Keep names in their original form; do not translate personal names.`
       + (terms ? ` Preferred vocabulary (choose these when the sound matches): ${terms}.` : '')
       + (context ? ` Earlier lines for context only, do NOT translate them: ${context}` : '')
       + ` Reply as compact JSON only: {"fixed":"corrected source sentence","out":"${to} translation"}`;
