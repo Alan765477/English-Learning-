@@ -452,13 +452,21 @@ const AI = {
   async correctTranslate(text, toLoc, context) {
     const to = (LANGS[toLoc] || LANGS['zh-CN']).eng;
     const terms = (Store.get('glossary') || '').trim();
-    const sys = 'You clean up one utterance of live meeting speech-recognition output, then translate it. '
-      + 'The recognized text may contain errors: homophones (e.g. Chinese 件/键), wrong word boundaries, and merged or split acronyms. '
-      + `Using the domain terms and recent context, FIRST fix the recognized text (correct homophones, separate merged acronyms like "CARPCDCC"→"CAR PC DCC", restore intended technical terms) WITHOUT adding or removing meaning, THEN translate the corrected text into natural, concise ${to}.`
-      + (terms ? ` Domain terms (prefer these when the audio seems to intend them): ${terms}.` : '')
-      + (context ? ` Recent context for reference only, do NOT translate it: ${context}` : '')
-      + ` Reply as compact JSON only: {"fixed":"corrected source text","out":"${to} translation"}`;
-    const raw = await this._oneShot(sys, text, 320);
+    // Input-method-style reconstruction: the text is a phonetic transcription,
+    // so wrong words almost always SOUND like the intended ones. Reason over
+    // pronunciation to recover the most likely sentence, then translate.
+    const sys = 'You are the autocorrect layer for a live meeting transcriber, like a smart input method (输入法). '
+      + 'The input is speech-to-text output, so any wrong word almost always SOUNDS like the word that was actually spoken. '
+      + 'Reconstruct the most likely intended sentence by reasoning about pronunciation:\n'
+      + '- Fix Chinese homophones to the word that fits a business/engineering meeting (e.g. 胶样→交样, 电子键→电子件, 图子→图纸).\n'
+      + '- A Chinese "word" that makes no sense in context is often a mis-heard ENGLISH term that sounds similar — restore the English (e.g. 利益 spoken as "lead", 麦丽 as "lead", 三普 as "sample").\n'
+      + '- Separate merged acronyms/letters (CARPCDCC→CAR PC DCC) and keep product names, model numbers and standard codes intact.\n'
+      + '- Only fix likely recognition errors; never add, drop, or rephrase real content. If a word is already correct, keep it.\n'
+      + `After fixing, translate the corrected sentence into natural, concise ${to}.`
+      + (terms ? ` Preferred vocabulary (choose these when the sound matches): ${terms}.` : '')
+      + (context ? ` Earlier lines for context only, do NOT translate them: ${context}` : '')
+      + ` Reply as compact JSON only: {"fixed":"corrected source sentence","out":"${to} translation"}`;
+    const raw = await this._oneShot(sys, text, 400);
     try {
       const m = raw.match(/\{[\s\S]*\}/);
       const o = JSON.parse(m ? m[0] : raw);
