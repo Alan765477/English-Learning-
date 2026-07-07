@@ -274,9 +274,18 @@
     <label>术语表（重要：把同事英文名、产品名、行业词、标准都填进来——像 Teams 读通讯录一样，填了才认得出。逗号分隔）</label>
     <textarea id="set-glossary" rows="3" placeholder="例如：JACK HU, reliability, Tesla, ASME, GD&amp;T, lead time, 交样" style="width:100%;padding:11px 12px;border-radius:10px;font-size:14px;border:none;background:var(--surface2);color:var(--text);outline:none;resize:vertical"></textarea>
     <div class="chips" style="margin-top:8px">
-      <button type="button" class="chip pack" data-pack="auto">＋汽车/整车工程</button>
+      <button type="button" class="chip pack" data-pack="auto">＋汽车/整车</button>
       <button type="button" class="chip pack" data-pack="std">＋机械/标准</button>
+      <button type="button" class="chip pack" data-pack="elec">＋电子/PCBA</button>
       <button type="button" class="chip pack" data-pack="biz">＋通用商务</button>
+    </div>
+    <button type="button" id="gloss-extract-toggle" class="chip" style="margin-top:10px;background:rgba(10,132,255,.22);color:var(--accent)">✨ 智能提取术语（粘贴资料 / 用本次字幕，AI 自动挑词）</button>
+    <div id="gloss-extract" class="hidden" style="margin-top:8px">
+      <textarea id="extract-src" rows="4" placeholder="把任何现成资料粘进来：参会名单、规格书、BOM 表、邮件、微信群名片…… AI 会自动挑出人名、产品名、缩写、专业词，加进上面的术语表。" style="width:100%;padding:11px 12px;border-radius:10px;font-size:14px;border:none;background:var(--surface2);color:var(--text);outline:none;resize:vertical"></textarea>
+      <div class="chips" style="margin-top:6px">
+        <button type="button" id="extract-run" class="chip">从上面文本提取</button>
+        <button type="button" id="extract-transcript" class="chip">用本次字幕提取</button>
+      </div>
     </div>
   </div>
 
@@ -398,6 +407,7 @@ const VOCAB_PACKS = {
   auto: ['Tesla','Rivian','Lucid','BYD','NIO','powertrain','BOM','teardown','gigacasting','4680','kWh','OEM','Tier 1','takt time','lead time','powertrain','chassis','HVAC','ADAS','torque','fixture','tooling','stamping','casting','weld','wiring harness','battery pack','skateboard','e-axle','inverter','thermal management','crash test','NVH','prototype','pre-production','ramp-up','yield','throughput'],
   std: ['ASME','ASTM','ISO','DIN','JIS','SAE','GB','ANSI','IATF 16949','ISO 9001','RoHS','REACH','GD&T','datum','tolerance','fit','clearance','interference','fillet','chamfer','Ra','Rz','micron','CMM','CNC','CAD','CAE','FEA','callout','spec','drawing','revision','PPAP','FMEA','DFMEA','APQP','MSA','SPC','Cpk'],
   biz: ['OKR','KPI','ROI','milestone','deliverable','stakeholder','action item','follow-up','deadline','timeline','budget','forecast','Q1','Q2','Q3','Q4','roadmap','scope','sync','align','escalate','blocker','bandwidth','headcount','onboarding','offshore','vendor','RFQ','PO','SOW','NDA','MOQ','ETA'],
+  elec: ['PCBA','PCB','SMT','DIP','BGA','SMD','QFN','reflow','solder','solder paste','stencil','AOI','ICT','FCT','DFM','DFT','Gerber','BOM','footprint','silkscreen','via','trace','pad','netlist','EMC','EMI','ESD','RoHS','FPC','FFC','connector','header','capacitor','resistor','inductor','MCU','FPGA','crystal','oscillator','firmware','flash','I2C','SPI','UART','GPIO','LDO','PMIC','datasheet'],
 };
 
 // ---------------------------------------------------------------------------
@@ -489,6 +499,23 @@ const AI = {
 
   minutes(transcriptText) {
     return this._oneShot(this.MINUTES_SYS, transcriptText, 1500);
+  },
+
+  // Pull glossary candidates out of any pasted material or transcript.
+  async extractTerms(text) {
+    const sys = 'From the text, extract a glossary of terms that a speech recognizer would likely get wrong: '
+      + "people's names (especially English names and romanized Chinese names), company and product names, "
+      + 'technical acronyms (e.g. PCBA, SMT, ASME, DCC), part numbers, standard codes, and domain-specific jargon. '
+      + 'Preserve original spelling and capitalization. Exclude ordinary everyday words. '
+      + 'Reply with ONLY a JSON array of short strings, deduplicated. No commentary.';
+    const raw = await this._oneShot(sys, text.slice(0, 8000), 900);
+    try {
+      const m = raw.match(/\[[\s\S]*\]/);
+      const arr = JSON.parse(m ? m[0] : raw);
+      return Array.isArray(arr) ? arr.map(s => String(s).trim()).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
   },
 
   // Short content-based title for the session archive.
@@ -1031,18 +1058,47 @@ const TeamsInterp = {
     };
     document.getElementById('ti-set-save').onclick = () => this.saveSettings();
 
-    // Vocabulary-pack quick-add: append the pack's terms to the glossary box,
-    // skipping any already present.
+    // Append terms to the glossary box, skipping any already present
+    // (case-insensitive). Returns how many were newly added.
+    const appendGlossary = (terms) => {
+      const ta = document.getElementById('set-glossary');
+      const have = new Set(ta.value.split(/[,，、\n]/).map(s => s.trim().toLowerCase()).filter(Boolean));
+      const add = [];
+      terms.forEach(t => { const k = t.trim().toLowerCase(); if (t.trim() && !have.has(k)) { have.add(k); add.push(t.trim()); } });
+      if (add.length) ta.value = (ta.value.trim() ? ta.value.trim() + ', ' : '') + add.join(', ');
+      return add.length;
+    };
+
+    // Vocabulary-pack quick-add.
     document.querySelectorAll('.chip.pack').forEach(btn => {
       btn.onclick = () => {
-        const ta = document.getElementById('set-glossary');
-        const have = new Set(ta.value.split(/[,，、\n]/).map(s => s.trim().toLowerCase()).filter(Boolean));
-        const add = (VOCAB_PACKS[btn.dataset.pack] || []).filter(t => !have.has(t.toLowerCase()));
-        if (!add.length) { toast('该词包已全部添加'); return; }
-        ta.value = (ta.value.trim() ? ta.value.trim() + ', ' : '') + add.join(', ');
-        toast('已添加 ' + add.length + ' 个词，记得点「保存」');
+        const n = appendGlossary(VOCAB_PACKS[btn.dataset.pack] || []);
+        toast(n ? '已添加 ' + n + ' 个词，记得点「保存」' : '该词包已全部添加');
       };
     });
+
+    // Smart extraction: paste any material (roster, spec, BOM, email) or use
+    // the current transcript; the LLM pulls out names/acronyms/jargon.
+    document.getElementById('gloss-extract-toggle').onclick = () => {
+      document.getElementById('gloss-extract').classList.toggle('hidden');
+    };
+    const runExtract = async (text, label) => {
+      if (!AI.configured()) { toast('智能提取需要 AI Key（Claude/DeepSeek）——先在下面填好'); return; }
+      if (!text || !text.trim()) { toast('没有可提取的内容'); return; }
+      toast('AI 正在提取术语…', 3000);
+      try {
+        const terms = await AI.extractTerms(text);
+        if (!terms.length) { toast('没提取到明显的术语'); return; }
+        const n = appendGlossary(terms);
+        toast(n ? `从${label}提取到 ${terms.length} 个词，新增 ${n} 个，记得点「保存」` : `${label}里的词已全部在术语表中`, 6000);
+      } catch {
+        toast('提取失败，检查 AI Key/网络');
+      }
+    };
+    document.getElementById('extract-run').onclick = () =>
+      runExtract(document.getElementById('extract-src').value, '文本');
+    document.getElementById('extract-transcript').onclick = () =>
+      runExtract(this.transcriptText(), '本次字幕');
 
     this.hint();
   },
