@@ -9,8 +9,18 @@ TOOL_DIR = Path(__file__).resolve().parent.parent
 DEFAULTS = {
     "llm": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
     "video": {"width": 1080, "height": 1920, "fps": 60, "scenes": 5, "min_scene_seconds": 3.0},
-    "tts": {"voice": "zh-CN-XiaoxiaoNeural", "rate": "+10%"},
-    "subtitle": {"font_size": 62, "margin_v": 320, "font_file": "", "font_name": ""},
+    "tts": {"voice": "zh-CN-XiaoxiaoNeural", "rate": "+10%", "azure_key": "", "azure_region": ""},
+    "subtitle": {
+        "font_size": 62,
+        "margin_v": 320,
+        "position": "bottom",
+        "color": "FFFFFF",
+        "outline_color": "000000",
+        "outline_width": 4,
+        "bold": True,
+        "font_file": "",
+        "font_name": "",
+    },
 }
 
 # 各平台常见中文字体:(文件路径, libass 使用的字体族名)

@@ -41,9 +41,27 @@ def _ass_time(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:05.2f}"
 
 
+def _ass_color(hex_rgb: str) -> str:
+    """'FFFFFF' / '#FFCC00' → ASS 的 &H00BBGGRR 格式。"""
+    s = hex_rgb.lstrip("#").strip()
+    if len(s) != 6:
+        s = "FFFFFF"
+    r, g, b = s[0:2], s[2:4], s[4:6]
+    return f"&H00{b}{g}{r}".upper()
+
+
+# 字幕垂直位置 → ASS Alignment 值(水平都居中)
+_ALIGN = {"bottom": 2, "center": 5, "top": 8}
+
+
 def write_ass(text: str, duration: float, dest: Path, cfg: dict, font_name: str):
-    """整个分镜期间常显的一条字幕(白字黑边、底部安全区上方)。"""
+    """整个分镜期间常显的一条字幕,样式全部来自 config.json 的 subtitle 段。"""
     sub = cfg["subtitle"]
+    align = _ALIGN.get(sub.get("position", "bottom"), 2)
+    primary = _ass_color(sub.get("color", "FFFFFF"))
+    outline_c = _ass_color(sub.get("outline_color", "000000"))
+    outline_w = sub.get("outline_width", 4)
+    bold = -1 if sub.get("bold", True) else 0
     content = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {cfg['video']['width']}
@@ -52,7 +70,7 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Sub,{font_name},{sub['font_size']},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,1,2,70,70,{sub['margin_v']},1
+Style: Sub,{font_name},{sub['font_size']},{primary},{primary},{outline_c},&H80000000,{bold},0,0,0,100,100,0,0,1,{outline_w},1,{align},70,70,{sub['margin_v']},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

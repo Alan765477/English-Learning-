@@ -42,6 +42,48 @@ def _write_copy_files(workdir: Path, content: dict, sources: list):
         (workdir / "素材来源.txt").write_text("\n".join(lines), encoding="utf-8")
 
 
+def run_links_only(idea: str, cfg: dict, out_dir=None) -> Path:
+    """只生成文案 + 找素材链接,不下载不剪辑,方便用户自己下载后手动编辑。"""
+    n_scenes = cfg["video"]["scenes"]
+    print("[1/2] 正在用 DeepSeek 生成标题、文案、标签和分镜脚本...")
+    content = llm.generate_content(idea, n_scenes, cfg)
+    print(f"      标题:{content['title']}")
+
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    base = Path(out_dir) if out_dir else (cfg_mod.TOOL_DIR / "output")
+    workdir = base / f"{ts}_{_slug(content['title'])}_仅链接"
+    workdir.mkdir(parents=True, exist_ok=True)
+
+    print(f"[2/2] 正在从 Pexels 为 {len(content['scenes'])} 个分镜各找 3 条候选素材...")
+    used_ids: set = set()
+    lines = ["每个分镜给出最多 3 条候选(已按贴合度排序)。",
+             "「页面」是 Pexels 预览页,「直链」复制到浏览器可直接下载 mp4。", ""]
+    for i, s in enumerate(content["scenes"], 1):
+        lines.append(f"—— 分镜{i} ——")
+        lines.append(f"口播:{s['voiceover']}")
+        lines.append(f"搜索词:{s['search_keywords']}")
+        cands = stock.find_candidates(s["search_keywords"], used_ids, cfg, limit=3)
+        if not cands:
+            lines.append("(没找到合适素材,建议换个更具体的想法重试)")
+        for j, c in enumerate(cands, 1):
+            fps = f"{c['fps']:.0f}fps" if c["fps"] else "?fps"
+            lines.append(f"  候选{j}: {c['w']}x{c['h']} {fps} {c['duration']}秒")
+            lines.append(f"    页面: {c['page_url']}")
+            lines.append(f"    直链: {c['download_url']}")
+        if cands:
+            used_ids.add(cands[0]["id"])  # 默认首选不跨分镜重复
+        lines.append("")
+        print(f"      分镜{i}: 找到 {len(cands)} 条候选")
+    (workdir / "素材链接.txt").write_text("\n".join(lines), encoding="utf-8")
+    _write_copy_files(workdir, content, [])
+
+    print()
+    print("完成!")
+    print(f"  素材链接:{workdir / '素材链接.txt'}")
+    print(f"  发布文案:{workdir / '文案.txt'}")
+    return workdir
+
+
 def run(idea: str | None, cfg: dict, *, demo=False, no_tts=False, keep_temp=False, out_dir=None) -> Path:
     n_scenes = cfg["video"]["scenes"]
     font_file, font_name = cfg_mod.find_font(cfg)

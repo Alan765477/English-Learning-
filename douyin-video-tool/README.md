@@ -56,11 +56,20 @@ python make_video.py "3个让英语口语翻倍的小技巧"
 ### 常用参数
 
 ```bash
-python make_video.py "想法" --scenes 4     # 改分镜数(默认5个,视频越长分镜越多)
-python make_video.py "想法" --no-tts       # 不要AI配音,只烧字幕(自己后期配音时用)
-python make_video.py "想法" --keep-temp    # 保留下载的原始素材和单段分镜
-python make_video.py --demo               # 不消耗任何API额度,测试环境是否正常
+python make_video.py "想法" --scenes 4      # 改分镜数(默认5个,视频越长分镜越多)
+python make_video.py "想法" --no-tts        # 不要AI配音,只烧字幕(自己后期配音时用)
+python make_video.py "想法" --keep-temp     # 保留下载的原始素材和单段分镜
+python make_video.py "想法" --links-only    # 只要文案+素材链接,不下载不剪辑(见下)
+python make_video.py --demo                # 不消耗任何API额度,测试环境是否正常
 ```
+
+### 只要链接,自己剪(--links-only)
+
+想自己用剪映等软件手动编辑时,用 `--links-only`:工具只生成文案,并为每个分镜找出
+**3 条候选素材**,输出到 `素材链接.txt`(含 Pexels 预览页和 mp4 下载直链),几秒钟跑完、
+不下载任何视频。你挑喜欢的下载,按自己的想法剪。
+
+正常模式下,每条成片用到的素材链接也都记录在 `素材来源.txt`,同样可以拿去重新下载原片。
 
 ### 发布
 
@@ -75,11 +84,39 @@ python make_video.py --demo               # 不消耗任何API额度,测试环�
 | `video.min_scene_seconds` | 3.0 | 单个分镜最短时长(秒) |
 | `tts.voice` | zh-CN-XiaoxiaoNeural | 配音音色,男声可换 `zh-CN-YunxiNeural` |
 | `tts.rate` | +10% | 语速,如 `+20%` 更快 |
-| `subtitle.font_size` | 62 | 字幕字号 |
-| `subtitle.font_file` | 自动探测 | 字幕字体文件,如 `C:\\Windows\\Fonts\\msyh.ttc` |
 | `llm.model` | deepseek-chat | 换模型/换兼容 OpenAI 接口的服务商都在 `llm` 里改 |
 
-查看全部可用配音音色:`edge-tts --list-voices | grep zh-CN`
+### 字幕样式(subtitle 段,改完下次生成就生效)
+
+| 配置项 | 默认 | 说明 |
+|---|---|---|
+| `font_size` | 62 | 字号 |
+| `position` | bottom | 垂直位置:`bottom` / `center` / `top` |
+| `margin_v` | 320 | 距离画面边缘的像素(position=bottom 时是距底部) |
+| `color` | FFFFFF | 字体颜色,RRGGBB 十六进制,如黄色 `FFDD00` |
+| `outline_color` | 000000 | 描边颜色 |
+| `outline_width` | 4 | 描边粗细,0 为无描边 |
+| `bold` | true | 是否加粗 |
+| `font_file` | 自动探测 | 字体文件,如 `C:\\Windows\\Fonts\\msyh.ttc` |
+
+已经生成的视频不能改字幕(字幕是烧进画面的),改配置后重跑一次即可;想后期自己加字幕就用 `--no-tts` 思路——留言告诉我,我可以加一个"输出不带字幕版+SRT字幕文件"的选项。
+
+### 配音引擎(tts 段)
+
+默认用 **Edge TTS**:免费、不用注册,和 Azure 用的是同一批微软神经网络音色,但它是非官方接口,没有服务保障,偶尔会失败(工具会自动降级)。
+
+想要更稳定、音色选择更多,可以用**微软官方 Azure 语音服务**:在 [portal.azure.com](https://portal.azure.com) 创建"语音服务"资源(免费层 F0 每月 50 万字符,做短视频绰绰有余),把密钥和区域填进 config.json:
+
+```json
+"tts": {
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "rate": "+10%",
+  "azure_key": "你的Azure密钥",
+  "azure_region": "eastasia"
+}
+```
+
+填了就自动优先走 Azure,Azure 失败时自动回落到 Edge TTS。两个引擎的音色名通用,常用的:`zh-CN-XiaoxiaoNeural`(女,默认)、`zh-CN-YunxiNeural`(男)、`zh-CN-YunjianNeural`(男,浑厚)、`zh-CN-XiaoyiNeural`(女,活泼)。查看全部:`edge-tts --list-voices | grep zh-CN`
 
 ## 常见问题
 

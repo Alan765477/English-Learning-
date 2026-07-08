@@ -17,12 +17,19 @@
 
   "tts": {
     "voice": "zh-CN-XiaoxiaoNeural",
-    "rate": "+10%"
+    "rate": "+10%",
+    "azure_key": "",
+    "azure_region": ""
   },
 
   "subtitle": {
     "font_size": 62,
     "margin_v": 320,
+    "position": "bottom",
+    "color": "FFFFFF",
+    "outline_color": "000000",
+    "outline_width": 4,
+    "bold": true,
     "font_file": "",
     "font_name": ""
   }

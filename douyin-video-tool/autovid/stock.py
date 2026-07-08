@@ -62,6 +62,35 @@ def _download(url: str, dest: Path):
                 fh.write(chunk)
 
 
+def find_candidates(keywords: str, used_ids: set, cfg: dict, limit: int = 3) -> list:
+    """只搜索不下载:返回最多 limit 条候选素材的信息(给用户自己挑选/下载)。"""
+    api_key = cfg["pexels_api_key"]
+    want_w, want_h = cfg["video"]["width"], cfg["video"]["height"]
+    out = []
+    for orientation in ("portrait", None):
+        for v in _search(keywords, api_key, orientation):
+            if v["id"] in used_ids or any(c["id"] == v["id"] for c in out):
+                continue
+            f = _pick_file(v, want_w, want_h)
+            if not f:
+                continue
+            fps = f.get("fps") or 0
+            out.append({
+                "id": v["id"],
+                "page_url": v.get("url", ""),
+                "download_url": f["link"],
+                "w": f.get("width"),
+                "h": f.get("height"),
+                "fps": fps,
+                "duration": v.get("duration") or 0,
+            })
+            if len(out) >= limit:
+                return out
+        if out:
+            break
+    return out
+
+
 def fetch_clip(keywords: str, dest: Path, used_ids: set, cfg: dict) -> dict | None:
     """按关键词找一段素材下载到 dest。返回 {"id","url","fps","w","h"},失败返回 None。"""
     api_key = cfg["pexels_api_key"]

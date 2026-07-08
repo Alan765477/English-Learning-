@@ -21,6 +21,8 @@ def main():
     parser.add_argument("idea", nargs="?", help="视频想法/主题,用引号包起来")
     parser.add_argument("--scenes", type=int, help="分镜数量(默认取 config.json,通常 5)")
     parser.add_argument("--no-tts", action="store_true", help="不加 AI 配音,只烧字幕")
+    parser.add_argument("--links-only", action="store_true",
+                        help="只输出文案和素材链接(每个分镜3条候选),不下载不剪辑,自己手动编辑时用")
     parser.add_argument("--demo", action="store_true", help="演示模式:不调用任何 API,验证环境是否正常")
     parser.add_argument("--keep-temp", action="store_true", help="保留中间文件(素材、单段分镜)方便检查")
     parser.add_argument("--output", help="输出目录(默认 douyin-video-tool/output/)")
@@ -34,6 +36,12 @@ def main():
         cfg_mod.require_keys(cfg)
     if args.scenes:
         cfg["video"]["scenes"] = max(1, min(args.scenes, 10))
+
+    if args.links_only:
+        if not args.idea:
+            parser.error("--links-only 需要提供视频想法")
+        pipeline.run_links_only(args.idea, cfg, out_dir=args.output)
+        return
 
     pipeline.run(
         args.idea,
