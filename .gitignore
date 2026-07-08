@@ -1,2 +1,7 @@
 node_modules/
 package*.json
+
+# 抖音视频工具:密钥和产物不要提交
+douyin-video-tool/config.json
+douyin-video-tool/output/
+__pycache__/

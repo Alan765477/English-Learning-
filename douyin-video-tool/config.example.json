@@ -1,0 +1,29 @@
+{
+  "deepseek_api_key": "在这里填你的 DeepSeek API key(sk-开头)",
+  "pexels_api_key": "在这里填你的 Pexels API key",
+
+  "llm": {
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-chat"
+  },
+
+  "video": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 60,
+    "scenes": 5,
+    "min_scene_seconds": 3.0
+  },
+
+  "tts": {
+    "voice": "zh-CN-XiaoxiaoNeural",
+    "rate": "+10%"
+  },
+
+  "subtitle": {
+    "font_size": 62,
+    "margin_v": 320,
+    "font_file": "",
+    "font_name": ""
+  }
+}
