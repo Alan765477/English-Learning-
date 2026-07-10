@@ -585,11 +585,13 @@ const AI = {
     const key = Store.get('apiKey');
     if (!key || Store.get('provider') !== 'claude') return '';
     const sys = 'You look at a screenshot of a Microsoft Teams meeting and identify WHO is currently speaking. '
-      + 'Teams highlights the active speaker\'s video tile / avatar with a colored border or a glowing microphone ring, '
-      + 'and shows each participant\'s name label in the corner of their tile. '
-      + 'Return the exact name shown for the highlighted (actively speaking) person. '
-      + 'If a name label is visible, copy it verbatim (keep the original spelling/case, e.g. "JACK HU"). '
-      + 'If nobody is clearly highlighted, or you cannot read a name, return an empty string. '
+      + 'The active speaker\'s tile is highlighted with a colored border or a glowing microphone / animated ring. '
+      + 'EVERY participant tile also carries a written TEXT NAME LABEL — usually in a bottom corner of the tile (sometimes the top). '
+      + 'That text label is always present regardless of what the tile shows: a live camera, a profile PHOTO, or a colored circle with initials. '
+      + 'Read the highlighted speaker\'s name from that TEXT LABEL. '
+      + 'Do NOT rely on the avatar image: a profile photo has no initials to read, and initials alone are not a name — always use the written name label. '
+      + 'Copy the name verbatim, keeping the original spelling and case (e.g. "JACK HU"). '
+      + 'If you genuinely cannot read any name text for the highlighted person, return an empty string — never guess a name from a face, a photo, or bare initials. '
       + 'Reply as compact JSON only: {"name":"<name or empty>"}';
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -643,9 +645,9 @@ const SpeakerVision = {
     if (this.busy || !this.video || !this.onName) return;
     const vw = this.video.videoWidth, vh = this.video.videoHeight;
     if (!vw || !vh) return;
-    // Downscale the long edge to ~1000px — plenty for reading name labels,
-    // keeps the image payload (and cost/latency) small.
-    const scale = Math.min(1, 1000 / Math.max(vw, vh));
+    // Downscale the long edge to ~1400px — a balance that keeps the small
+    // name-label text on gallery tiles legible while holding payload/cost down.
+    const scale = Math.min(1, 1400 / Math.max(vw, vh));
     this.canvas.width = Math.round(vw * scale);
     this.canvas.height = Math.round(vh * scale);
     this.canvas.getContext('2d').drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
