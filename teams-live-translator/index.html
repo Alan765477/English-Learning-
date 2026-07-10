@@ -289,6 +289,7 @@
     <div class="r"><div class="rmain"><div class="rt">AI 校正</div><div class="rs">推荐常开。用术语库+上下文纠正识别错误，多数场景选它就够</div></div><label class="sw"><input id="set-correct" type="checkbox"><span class="tk"></span></label></div>
     <div class="r"><div class="rmain"><div class="rt">中英混合识别</div><div class="rs">仅当整句频繁中英夹杂时开。纯一种语言的会议开了反而更容易错，别常开</div></div><label class="sw"><input id="set-mixed" type="checkbox"><span class="tk"></span></label></div>
     <div class="r nav" id="open-glossary"><div class="rmain"><div class="rt">术语库</div><div class="rs">同事名/产品名/专业词，填了才认得出</div></div><span class="rv" id="gloss-count">0 词</span></div>
+    <div class="r"><div class="rmain"><div class="rt">识别发言人</div><div class="rs">读会议画面判断谁在说话，用真实姓名代替「对方」。仅「会议声音/双向」模式，需 Claude Key</div></div><label class="sw"><input id="set-speaker" type="checkbox"><span class="tk"></span></label></div>
   </div>
 
   <div class="sec">字幕显示</div>
@@ -413,7 +414,7 @@ function toast(msg, ms = 4000) {
 // Settings — localStorage only; keys never leave this browser.
 const Store = {
   KEY: 'tlt_settings_v1',
-  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '', langThem: 'en-US', langMe: 'zh-CN', glossary: '', mixedLang: false, aiCorrect: false, capMode: 'both' },
+  defaults: { azureKey: '', azureRegion: '', provider: 'claude', apiKey: '', ttsOn: false, ttsSink: '', langThem: 'en-US', langMe: 'zh-CN', glossary: '', mixedLang: false, aiCorrect: false, capMode: 'both', speakerId: false },
   _cache: null,
   load() {
     if (this._cache) return this._cache;
@@ -573,6 +574,94 @@ const AI = {
       '为这段会议/通话字幕起一个简洁的中文标题，不超过12个字，概括主题（如「Q3预算讨论」「和客户对齐交付时间」）。只输出标题本身，不要引号和其他文字。',
       transcriptText.slice(0, 4000), 60);
     return raw.replace(/["「」『』'']/g, '').split('\n')[0].trim().slice(0, 20);
+  },
+
+  // Read the shared Teams screen and name the person currently speaking. Teams
+  // draws a highlight border (and a blue mic ring) around the active speaker's
+  // tile and prints each participant's name in the corner of their tile, so a
+  // vision model can pick the speaker out reliably. Claude-only (Anthropic
+  // vision); returns a short name string, or '' if it can't tell.
+  async detectSpeaker(imageB64) {
+    const key = Store.get('apiKey');
+    if (!key || Store.get('provider') !== 'claude') return '';
+    const sys = 'You look at a screenshot of a Microsoft Teams meeting and identify WHO is currently speaking. '
+      + 'Teams highlights the active speaker\'s video tile / avatar with a colored border or a glowing microphone ring, '
+      + 'and shows each participant\'s name label in the corner of their tile. '
+      + 'Return the exact name shown for the highlighted (actively speaking) person. '
+      + 'If a name label is visible, copy it verbatim (keep the original spelling/case, e.g. "JACK HU"). '
+      + 'If nobody is clearly highlighted, or you cannot read a name, return an empty string. '
+      + 'Reply as compact JSON only: {"name":"<name or empty>"}';
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json', 'x-api-key': key,
+        'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: this.DEFAULTS.claude, max_tokens: 80, system: sys,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageB64 } },
+          { type: 'text', text: '谁在说话？返回高亮发言人的姓名。' },
+        ] }],
+      }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const raw = (data.content || []).map(c => c.text || '').join('').trim();
+    try {
+      const m = raw.match(/\{[\s\S]*\}/);
+      const o = JSON.parse(m ? m[0] : raw);
+      return String(o.name || '').trim().slice(0, 40);
+    } catch {
+      return '';
+    }
+  },
+};
+
+// ---------------------------------------------------------------------------
+// SpeakerVision: periodically grab a frame from the shared meeting video and
+// ask the AI who is highlighted, so captions can carry the real speaker's name
+// instead of a generic「对方」. Polls slowly (~4.5s) and skips frames when no
+// meeting speech was recognized recently, to keep vision-call cost modest.
+const SpeakerVision = {
+  video: null, canvas: null, timer: null, busy: false, onName: null,
+  async start(stream, onName) {
+    this.onName = onName;
+    this.video = document.createElement('video');
+    this.video.muted = true; this.video.playsInline = true;
+    this.video.srcObject = stream;
+    try { await this.video.play(); } catch {}
+    this.canvas = document.createElement('canvas');
+    const tick = async () => {
+      if (!this.video) return;
+      await this.tick();
+      if (this.video) this.timer = setTimeout(tick, 4500);
+    };
+    this.timer = setTimeout(tick, 2500);
+  },
+  async tick() {
+    if (this.busy || !this.video || !this.onName) return;
+    const vw = this.video.videoWidth, vh = this.video.videoHeight;
+    if (!vw || !vh) return;
+    // Downscale the long edge to ~1000px — plenty for reading name labels,
+    // keeps the image payload (and cost/latency) small.
+    const scale = Math.min(1, 1000 / Math.max(vw, vh));
+    this.canvas.width = Math.round(vw * scale);
+    this.canvas.height = Math.round(vh * scale);
+    this.canvas.getContext('2d').drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+    let b64;
+    try { b64 = this.canvas.toDataURL('image/jpeg', 0.7).split(',')[1]; } catch { return; }
+    this.busy = true;
+    try {
+      const name = await AI.detectSpeaker(b64);
+      if (name && this.onName) this.onName(name);
+    } catch {} finally { this.busy = false; }
+  },
+  stop() {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    if (this.video) { try { this.video.pause(); } catch {} this.video.srcObject = null; }
+    this.video = null; this.canvas = null; this.onName = null; this.busy = false;
   },
 };
 
@@ -1016,7 +1105,9 @@ const TeamsInterp = {
   source: 'system',   // 'system' | 'mic' (ignored in duplex: it uses both)
   recs: [],           // running recognizers (browser SR or Azure)
   stream: null,       // captured meeting-audio stream
-  transcript: [],     // {who, src, out} — feeds the minutes generator
+  speakerStream: null,// meeting-video stream kept alive for speaker ID (vision)
+  currentSpeaker: '', // latest name read off the shared screen (speaker ID)
+  transcript: [],     // {who, name, src, out} — feeds the minutes generator
   session: null,      // current archive session {id, startedAt, name, lines}
   fontIdx: 1,
   FONTS: ['cap-s', 'cap-m', 'cap-l'],
@@ -1288,6 +1379,7 @@ const TeamsInterp = {
     const tags = [];
     if (Store.get('mixedLang')) tags.push(this.azureConfigured() ? '🈺 中英混合' : '⚠️ 混合识别需 Azure Key');
     if (Store.get('aiCorrect')) tags.push(AI.configured() ? '✍️ AI校正' : '⚠️ AI校正需 AI Key');
+    if (Store.get('speakerId')) tags.push(this.speakerEnabled() ? '👤 识别发言人' : '⚠️ 发言人识别需 Claude Key');
     if (tags.length) msg = tags.join(' · ') + '｜' + msg;
     this.status(msg);
   },
@@ -1311,11 +1403,43 @@ const TeamsInterp = {
       disp.getTracks().forEach(t => t.stop());
       throw new Error('没拿到声音——选「标签页」时音频默认开启；选「整个屏幕」需手动勾选左下角「共享系统音频」。再试一次');
     }
-    disp.getVideoTracks().forEach(t => t.stop());
+    const videoTracks = disp.getVideoTracks();
+    // Speaker ID reads the shared screen, so keep the video track alive and let
+    // SpeakerVision poll it. Only when it's on and Claude vision is available;
+    // otherwise drop the video immediately (audio-only, cheapest path).
+    if (this.speakerEnabled() && videoTracks.length) {
+      this.speakerStream = new MediaStream(videoTracks);
+      SpeakerVision.start(this.speakerStream, (name) => this.setSpeaker(name));
+    } else {
+      videoTracks.forEach(t => t.stop());
+    }
     this.stream = new MediaStream(tracks);
     // If the user hits the browser's own "stop sharing" bar, shut down too.
     tracks[0].onended = () => { if (this.active) this.stop(); };
     return this.stream;
+  },
+
+  // Speaker ID is on, Claude vision is available (needs an Anthropic key), and
+  // the user picked it in settings. Off → audio-only, generic「对方」labels.
+  speakerEnabled() {
+    return !!Store.get('speakerId') && Store.get('provider') === 'claude' && AI.configured();
+  },
+
+  // A newly detected speaker name from the shared screen. We only trust it when
+  // meeting speech was recognized recently (within ~10s) — otherwise the
+  // highlighted tile may be stale — and ignore repeats.
+  setSpeaker(name) {
+    if (!name) return;
+    if (Date.now() - (this._lastMeetingSpeech || 0) > 10000) return;
+    this.currentSpeaker = name;
+  },
+
+  // Display label for a channel. The meeting side ('them') shows the detected
+  // speaker's real name when speaker ID has found one, else the generic「对方」.
+  whoName(who) {
+    if (who === 'me') return '我';
+    if (who === 'them') return this.currentSpeaker || '对方';
+    return '';
   },
 
   async start() {
@@ -1335,7 +1459,9 @@ const TeamsInterp = {
         if (!this.azureConfigured()) { revert(); this.openSettings(); toast('会议声音模式需要 Azure Speech Key——已打开设置'); return; }
         const meeting = await this.captureMeetingAudio();
         const p = this.pair();
-        await this.startAzure({ stream: meeting, from: p.from, outLoc: p.out, who: '' });
+        // With speaker ID on, tag this single channel as「对方」so detected
+        // names have somewhere to show; otherwise keep it untagged.
+        await this.startAzure({ stream: meeting, from: p.from, outLoc: p.out, who: this.speakerEnabled() ? 'them' : '' });
       } else if (this.azureConfigured()) {
         const p = this.pair();
         await this.startAzure({ stream: null, from: p.from, outLoc: p.out, who: '' });
@@ -1389,6 +1515,10 @@ const TeamsInterp = {
     const audio = stream
       ? SDK.AudioConfig.fromStreamInput(stream)
       : SDK.AudioConfig.fromDefaultMicrophoneInput();
+    // A non-null stream is the meeting-audio channel (mic channel passes null).
+    // Speaker-ID trusts screen readings only right after meeting speech.
+    const isMeeting = !!stream;
+    const markSpeech = () => { if (isMeeting) this._lastMeetingSpeech = Date.now(); };
     const mixed = !!Store.get('mixedLang');
     const correct = !!Store.get('aiCorrect') && AI.configured();
     const useLLM = mixed || correct; // recognize with Azure, then let the LLM fix/translate
@@ -1411,11 +1541,12 @@ const TeamsInterp = {
         rec = new SDK.SpeechRecognizer(cfg, audio);
       }
       rec.recognizing = (s, e) => {
-        if (e.result && e.result.text) this.focusLive(e.result.text, '', who);
+        if (e.result && e.result.text) { markSpeech(); this.focusLive(e.result.text, '', who); }
       };
       rec.recognized = (s, e) => {
         const r = e.result;
         if (r && r.reason === SDK.ResultReason.RecognizedSpeech && r.text.trim()) {
+          markSpeech();
           this.focusIdle('正在听…');
           this.addLineLLM(r.text.trim(), outLoc, who);
         }
@@ -1426,11 +1557,12 @@ const TeamsInterp = {
       try { cfg.setProperty(SDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs, '600'); } catch {}
       rec = new SDK.SpeechRecognizer(cfg, audio);
       rec.recognizing = (s, e) => {
-        if (e.result && e.result.text) this.focusLive(e.result.text, '', who);
+        if (e.result && e.result.text) { markSpeech(); this.focusLive(e.result.text, '', who); }
       };
       rec.recognized = (s, e) => {
         const r = e.result;
         if (r && r.reason === SDK.ResultReason.RecognizedSpeech && r.text.trim()) {
+          markSpeech();
           this.focusIdle('正在听…');
           this.addLine(r.text.trim(), '', who, null);
         }
@@ -1445,11 +1577,12 @@ const TeamsInterp = {
       rec = new SDK.TranslationRecognizer(cfg, audio);
       const outOf = (r) => { try { return r.translations.get(to) || ''; } catch { return ''; } };
       rec.recognizing = (s, e) => {
-        if (e.result && e.result.text) this.focusLive(e.result.text, outOf(e.result), who);
+        if (e.result && e.result.text) { markSpeech(); this.focusLive(e.result.text, outOf(e.result), who); }
       };
       rec.recognized = (s, e) => {
         const r = e.result;
         if (r && r.reason === SDK.ResultReason.TranslatedSpeech && r.text.trim()) {
+          markSpeech();
           this.focusIdle('正在听…');
           this.addLine(r.text.trim(), outOf(r).trim(), who, outLoc);
         }
@@ -1635,6 +1768,13 @@ const TeamsInterp = {
       this.stream.getTracks().forEach(t => t.stop());
       this.stream = null;
     }
+    SpeakerVision.stop();
+    if (this.speakerStream) {
+      this.speakerStream.getTracks().forEach(t => t.stop());
+      this.speakerStream = null;
+    }
+    this.currentSpeaker = '';
+    this._lastMeetingSpeech = 0;
   },
 
   // Subtitle display mode: 'both' (译文大字 + 原文小字), 'out', or 'src'.
@@ -1661,7 +1801,7 @@ const TeamsInterp = {
       if (!l) return;
       const box = document.getElementById('ti-focus');
       box.classList.remove('idle');
-      const prefix = l.who === 'me' ? '我' : l.who === 'them' ? '对方' : '';
+      const prefix = this.whoName(l.who);
       const { big, small } = this._bigSmall(l.src, l.out);
       document.getElementById('ti-focus-out').textContent = big || '…';
       document.getElementById('ti-focus-src').textContent = small ? (prefix ? prefix + '：' : '') + small : prefix;
@@ -1684,7 +1824,7 @@ const TeamsInterp = {
     if (who) {
       const tag = document.createElement('span');
       tag.className = 'ti-who ' + who;
-      tag.textContent = who === 'me' ? '我' : '对方';
+      tag.textContent = this.whoName(who);
       row.appendChild(tag);
     }
     this._fillRow(row, src, out);
@@ -1712,7 +1852,7 @@ const TeamsInterp = {
 
   addLine(src, out, who, outLoc) {
     this._row(src, out, who);
-    this.transcript.push({ who, src, out });
+    this.transcript.push({ who, name: this.whoName(who), src, out });
     this._lastCap = { out: out || src, src: out ? src : '', ts: Date.now() };
     this._saveSoon();
     if (out) TTS.speak(out, outLoc || this.pair().out);
@@ -1755,7 +1895,7 @@ const TeamsInterp = {
         out = await AI.translateTo(src, outLoc);
       }
       this._fillRow(row, fixed, out);
-      this.transcript.push({ who, src: fixed, out });
+      this.transcript.push({ who, name: this.whoName(who), src: fixed, out });
       this._saveSoon();
       this._lastCap = { out, src: fixed, ts: Date.now() };
       TTS.speak(out, outLoc);
@@ -1774,7 +1914,7 @@ const TeamsInterp = {
     if (who) {
       const tag = document.createElement('span');
       tag.className = 'ti-who ' + who;
-      tag.textContent = who === 'me' ? '我' : '对方';
+      tag.textContent = this.whoName(who);
       row.appendChild(tag);
     }
     const zh = document.createElement('div'); zh.className = 'ti-zh'; zh.textContent = src;
@@ -1869,7 +2009,7 @@ const TeamsInterp = {
 
   transcriptText(lines = this.transcript) {
     return lines.map(l => {
-      const who = l.who === 'me' ? '我' : l.who === 'them' ? '对方' : '发言';
+      const who = l.name || (l.who === 'me' ? '我' : l.who === 'them' ? '对方' : '发言');
       return who + '：' + l.src + (l.out ? '\n　　' + l.out : '');
     }).join('\n');
   },
@@ -1920,6 +2060,7 @@ const TeamsInterp = {
     document.getElementById('set-glossary').value = Store.get('glossary') || '';
     document.getElementById('set-mixed').checked = !!Store.get('mixedLang');
     document.getElementById('set-correct').checked = !!Store.get('aiCorrect');
+    document.getElementById('set-speaker').checked = !!Store.get('speakerId');
     this._capModePick = this.capMode();
     document.querySelectorAll('#set-capmode button').forEach(b =>
       b.classList.toggle('on', b.dataset.cap === this._capModePick));
@@ -1957,6 +2098,7 @@ const TeamsInterp = {
       glossary: document.getElementById('set-glossary').value.trim(),
       mixedLang: document.getElementById('set-mixed').checked,
       aiCorrect: document.getElementById('set-correct').checked,
+      speakerId: document.getElementById('set-speaker').checked,
       capMode: this._capModePick || 'both',
       ttsSink: document.getElementById('set-tts-sink').value,
     });
