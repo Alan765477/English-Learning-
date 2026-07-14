@@ -900,16 +900,10 @@ const ScreenRec = {
   mr: null, ctx: null, chunks: [], writable: null, streams: [],
   _timer: null, _video: null,
 
-  async start() {
-    const disp = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
-      audio: true,
-      systemAudio: 'include',
-      selfBrowserSurface: 'exclude',
-      surfaceSwitching: 'include',
-      monitorTypeSurfaces: 'include',
-    });
-    this.streams.push(disp);
+  // `disp` is the shared screen surface, captured and owned by TeamsInterp and
+  // passed in — so recording reuses whatever was already shared for translation
+  // (no second window-picker). We only add our own mic here.
+  async start(disp) {
     let mic = null;
     try { mic = await navigator.mediaDevices.getUserMedia({ audio: true }); this.streams.push(mic); } catch {}
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -937,8 +931,8 @@ const ScreenRec = {
       this._video = v;
       this._timer = setInterval(() => this._draw(v, cctx, W, H), 50); // ~20fps
       videoTracks = canvas.captureStream(20).getVideoTracks();
-      // Browser's own "stop sharing" bar ends the recording too.
-      vt.onended = () => { if (this.active) TeamsInterp.toggleScreenRec(); };
+      // The shared surface's "stop sharing" bar is handled by TeamsInterp
+      // (it owns the display track), so we don't add our own onended here.
     }
     const stream = new MediaStream([...videoTracks, ...dest.stream.getAudioTracks()]);
     const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm';
@@ -1013,10 +1007,13 @@ const ScreenRec = {
       this.mr = null;
       if (!mr) { resolve(null); return; }
       mr.onstop = async () => {
+        // Only our own streams (the mic); the shared display belongs to
+        // TeamsInterp, which releases it once nothing else needs it.
         this.streams.forEach(s => s.getTracks().forEach(t => t.stop()));
         this.streams = [];
         try { if (this.ctx) this.ctx.close(); } catch {}
         this.ctx = null;
+        try { TeamsInterp.maybeReleaseDisplay(); } catch {}
         if (this.writable) {
           try { await this.writable.close(); } catch {}
           this.writable = null;
@@ -1106,7 +1103,8 @@ const TeamsInterp = {
   dir: 'them',        // 'them' (listen) | 'me' (speak) | 'duplex' (both)
   source: 'system',   // 'system' | 'mic' (ignored in duplex: it uses both)
   recs: [],           // running recognizers (browser SR or Azure)
-  stream: null,       // captured meeting-audio stream
+  stream: null,       // captured meeting-audio stream (wraps displayStream audio)
+  displayStream: null,// the shared getDisplayMedia surface (video+audio), reused by translate + record
   speakerStream: null,// meeting-video stream kept alive for speaker ID (vision)
   currentSpeaker: '', // latest name read off the shared screen (speaker ID)
   transcript: [],     // {who, name, src, out} — feeds the minutes generator
@@ -1388,10 +1386,15 @@ const TeamsInterp = {
 
   toggle() { this.active ? this.stop() : this.start(); },
 
-  async captureMeetingAudio() {
-    // Chrome only exposes tab/system audio alongside a video track; we drop
-    // the video immediately and keep just the audio. The extra hints make the
-    // picker friendlier: offer system audio, hide this tab from the list.
+  // Capture the shared screen/window ONCE and reuse it for translation, speaker
+  // ID and screen recording — so the user never picks the window twice. Returns
+  // the existing surface if it's still live; only prompts the picker otherwise.
+  // Must be called inside a user gesture (click) when it actually prompts.
+  async captureDisplay() {
+    const live = this.displayStream && this.displayStream.getVideoTracks().some(t => t.readyState === 'live');
+    if (live) return this.displayStream;
+    // Chrome only exposes tab/system audio alongside a video track. The extra
+    // hints make the picker friendlier: offer system audio, hide this tab.
     const disp = await navigator.mediaDevices.getDisplayMedia({
       video: true,
       audio: true,
@@ -1400,24 +1403,46 @@ const TeamsInterp = {
       surfaceSwitching: 'include',
       monitorTypeSurfaces: 'include',
     });
+    this.displayStream = disp;
+    // The browser's own "stop sharing" bar ends everything using the surface.
+    const vt = disp.getVideoTracks()[0];
+    if (vt) vt.onended = () => this.onDisplayEnded();
+    return disp;
+  },
+
+  // User hit the browser "stop sharing" bar — tear down both consumers.
+  onDisplayEnded() {
+    this.displayStream = null;
+    if (ScreenRec.active) this.toggleScreenRec();
+    if (this.active) this.stop();
+  },
+
+  // Release the shared surface only when neither translation nor recording
+  // needs it anymore (either one may outlive the other).
+  maybeReleaseDisplay() {
+    if (this.active || ScreenRec.active) return;
+    if (this.displayStream) {
+      this.displayStream.getTracks().forEach(t => t.stop());
+      this.displayStream = null;
+    }
+  },
+
+  async captureMeetingAudio() {
+    const disp = await this.captureDisplay();
     const tracks = disp.getAudioTracks();
     if (!tracks.length) {
-      disp.getTracks().forEach(t => t.stop());
+      this.maybeReleaseDisplay();
       throw new Error('没拿到声音——选「标签页」时音频默认开启；选「整个屏幕」需手动勾选左下角「共享系统音频」。再试一次');
     }
     const videoTracks = disp.getVideoTracks();
-    // Speaker ID reads the shared screen, so keep the video track alive and let
-    // SpeakerVision poll it. Only when it's on and Claude vision is available;
-    // otherwise drop the video immediately (audio-only, cheapest path).
+    // Speaker ID reads the shared screen — poll the (already-alive) video track.
+    // The video track stays live regardless now, so screen recording can reuse
+    // the same surface without a second picker.
     if (this.speakerEnabled() && videoTracks.length) {
       this.speakerStream = new MediaStream(videoTracks);
       SpeakerVision.start(this.speakerStream, (name) => this.setSpeaker(name));
-    } else {
-      videoTracks.forEach(t => t.stop());
     }
     this.stream = new MediaStream(tracks);
-    // If the user hits the browser's own "stop sharing" bar, shut down too.
-    tracks[0].onended = () => { if (this.active) this.stop(); };
     return this.stream;
   },
 
@@ -1448,6 +1473,8 @@ const TeamsInterp = {
     // Same language on both sides = transcription-only mode (meeting notes
     // without translation) — archive, minutes and recording all still work.
     this.transcribing = this.langThem() === this.langMe();
+    this._quotaHandled = false; // fresh run: allow a new quota fallback
+    this.currentSpeaker = '';
     const btn = document.getElementById('ti-toggle');
     btn.textContent = '连接中…';
     const revert = () => { btn.textContent = '开始翻译'; };
@@ -1507,12 +1534,15 @@ const TeamsInterp = {
     const key = (Store.get('azureKey') || '').replace(/\s+/g, '');
     const region = (Store.get('azureRegion') || '').trim().toLowerCase();
     const onCancel = (s, e) => {
-      if (e.reason === SDK.CancellationReason.Error) {
-        const detail = /401|Authentication/i.test(e.errorDetails || '') ? 'Key 或区域不对' : (e.errorDetails || '连接中断');
-        this.stop();
-        toast('❌ Azure 出错：' + detail, 6000);
-        this.status('Azure 出错：' + detail);
-      }
+      if (e.reason !== SDK.CancellationReason.Error) return;
+      const dt = e.errorDetails || '';
+      // Free-tier (F0) quota exhausted or rate-limited → handle specially:
+      // try to keep going on the free browser engine instead of just dying.
+      if (/quota|exceed|forbidden|403|429|too\s*many/i.test(dt)) { this._onAzureQuota(); return; }
+      const detail = /401|Authentication/i.test(dt) ? 'Key 或区域不对' : (dt || '连接中断');
+      this.stop();
+      toast('❌ Azure 出错：' + detail, 6000);
+      this.status('Azure 出错：' + detail);
     };
     const audio = stream
       ? SDK.AudioConfig.fromStreamInput(stream)
@@ -1663,6 +1693,38 @@ const TeamsInterp = {
     rec.start();
   },
 
+  // Azure free tier (F0) caps at 5 audio-hours/month; when exhausted the stream
+  // cancels with a quota/forbidden error. The free browser engine can only read
+  // the default MICROPHONE — not the captured meeting-audio stream — so we can
+  // auto-continue only in 麦克风 mode; 会议声音/双向 genuinely need Azure.
+  _onAzureQuota() {
+    if (this._quotaHandled) return;         // duplex fires two cancels; act once
+    this._quotaHandled = true;
+    const micMode = this.dir !== 'duplex' && this.source === 'mic';
+    const canFallback = micMode && this.webSpeechSupported() && (AI.configured() || this.transcribing);
+    this.cleanup();
+    TTS.stop();
+    if (canFallback) {
+      this.active = true;
+      this.startWebSpeech();
+      toast('⚠️ Azure 额度已用尽——已自动切到浏览器识别 + AI 翻译，继续进行', 8000);
+      this.status('Azure 额度用尽，已切到浏览器识别 + AI 翻译（麦克风）');
+    } else {
+      this.active = false;
+      const btn = document.getElementById('ti-toggle');
+      btn.textContent = '开始翻译';
+      btn.classList.remove('recording');
+      document.querySelector('.controls').classList.remove('running');
+      this.focusIdle('字幕会在这里出现');
+      toast('⚠️ Azure 语音额度/限制已达上限。「会议声音/双向」模式依赖 Azure，'
+        + '免费浏览器识别读不了会议音频、无法顶替。两个办法：'
+        + '① 到 Azure 门户把语音资源从 F0 免费层改成 S0 按量付费（约 $1/小时，个人用几乎可忽略，无月上限）；'
+        + '② 改用「麦克风」模式（可用免费浏览器识别 + AI 翻译）', 13000);
+      this.status('Azure 额度已用尽——升级 Azure 计费层，或改用麦克风模式');
+      this.archiveOnStop();
+    }
+  },
+
   stop() {
     this.active = false;
     this.cleanup();
@@ -1771,17 +1833,15 @@ const TeamsInterp = {
         else rec.stop();
       } catch {}
     });
-    if (this.stream) {
-      this.stream.getTracks().forEach(t => t.stop());
-      this.stream = null;
-    }
+    // this.stream / speakerStream just WRAP the shared display's tracks — don't
+    // stop those tracks here (screen recording may still be using the surface).
+    // Release the surface itself only when nothing else needs it.
+    this.stream = null;
     SpeakerVision.stop();
-    if (this.speakerStream) {
-      this.speakerStream.getTracks().forEach(t => t.stop());
-      this.speakerStream = null;
-    }
+    this.speakerStream = null;
     this.currentSpeaker = '';
     this._lastMeetingSpeech = 0;
+    this.maybeReleaseDisplay();
   },
 
   // Subtitle display mode: 'both' (译文大字 + 原文小字), 'out', or 'src'.
@@ -1990,8 +2050,14 @@ const TeamsInterp = {
       return;
     }
     try {
-      // Pick the save location inside the click gesture so hour-long
-      // recordings stream to disk instead of piling up in memory.
+      // Reuse the surface already shared for translation; only prompt the
+      // window-picker if nothing is shared yet. Grab it first (inside the click
+      // gesture) so the essential capture isn't lost to the save-dialog await.
+      const alreadyShared = !!(this.displayStream && this.displayStream.getVideoTracks().some(t => t.readyState === 'live'));
+      const disp = await this.captureDisplay();
+      // Pick the save location inside the click gesture so hour-long recordings
+      // stream to disk instead of piling up in memory. If a fresh screen prompt
+      // just consumed the gesture, this may throw — fall back to in-memory.
       if (window.showSaveFilePicker) {
         try {
           const h = await showSaveFilePicker({
@@ -2000,16 +2066,19 @@ const TeamsInterp = {
           });
           ScreenRec.writable = await h.createWritable();
         } catch (e) {
-          if (e && e.name === 'AbortError') return; // user cancelled the save dialog
+          if (e && e.name === 'AbortError') { this.maybeReleaseDisplay(); return; } // user cancelled the save dialog
           ScreenRec.writable = null;
         }
       }
-      await ScreenRec.start();
+      await ScreenRec.start(disp);
       chip.classList.add('rec-on');
       chip.textContent = '🎥 录屏中';
-      toast('🎥 录屏开始：画面 + 声音 + 中文字幕烧录进视频（约每小时 0.5~1GB）', 5000);
+      toast(alreadyShared
+        ? '🎥 录屏开始（沿用已共享的画面）：声音 + 中文字幕烧录进视频（约每小时 0.5~1GB）'
+        : '🎥 录屏开始：画面 + 声音 + 中文字幕烧录进视频（约每小时 0.5~1GB）', 5000);
     } catch (err) {
       if (ScreenRec.writable) { try { ScreenRec.writable.close(); } catch {} ScreenRec.writable = null; }
+      this.maybeReleaseDisplay();
       toast('❌ 无法开始录屏：' + (err && err.message ? err.message : '已取消'), 6000);
     }
   },
