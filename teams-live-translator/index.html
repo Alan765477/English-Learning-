@@ -1379,7 +1379,7 @@ const TeamsInterp = {
       msg = `麦克风听${nThem}出${nMe}字幕：外放开会或现场会议时使用（戴耳机收不到对方声音）`;
     }
     const tags = [];
-    if (Store.get('mixedLang')) tags.push(this.azureConfigured() ? '🈺 中英混合' : '⚠️ 混合识别需 Azure Key');
+    if (Store.get('mixedLang')) tags.push(!this.azureConfigured() ? '⚠️ 混合识别需 Azure Key' : !AI.configured() ? '⚠️ 混合识别需 AI Key（当前按普通翻译）' : '🈺 中英混合');
     if (Store.get('aiCorrect')) tags.push(AI.configured() ? '✍️ AI校正' : '⚠️ AI校正需 AI Key');
     if (Store.get('speakerId')) tags.push(this.speakerEnabled() ? '👤 识别发言人' : '⚠️ 发言人识别需 Claude Key');
     if (tags.length) msg = tags.join(' · ') + '｜' + msg;
@@ -1523,7 +1523,12 @@ const TeamsInterp = {
     const markSpeech = () => { if (isMeeting) this._lastMeetingSpeech = Date.now(); };
     const mixed = !!Store.get('mixedLang');
     const correct = !!Store.get('aiCorrect') && AI.configured();
-    const useLLM = mixed || correct; // recognize with Azure, then let the LLM fix/translate
+    // The LLM path recognizes with Azure, then the LLM fixes/translates — so it
+    // can ONLY produce a translation when an AI key exists. Mixed-language ID
+    // also lives here, but its translation step is the LLM too; without an AI
+    // key that step silently yields source-only. So require an AI key to take
+    // this path at all — otherwise fall through to Azure's own translation.
+    const useLLM = (mixed || correct) && AI.configured();
     let rec;
     if (useLLM) {
       // Recognize only (no Azure translation); the LLM does correct+translate.
